@@ -114,7 +114,7 @@ begin
 end;
 
 function DrawMaterial(Video: PFILTER_PROC_VIDEO; const Model: TPmxModel;
-  const Material: TPmxMaterial): Boolean;
+  const Material: TPmxMaterial; ForceDoubleSided: Boolean): Boolean;
 var
   HasTexture: Boolean;
   Resource: string;
@@ -123,8 +123,8 @@ begin
     Exit(True);
 
   if Assigned(Video^.SetCullingState) then
-    Video^.SetCullingState(Ord((Material.Flags and
-      PMX_MATERIAL_DRAW_BOTH_FACES) = 0));
+    Video^.SetCullingState(Ord(not ForceDoubleSided and
+      ((Material.Flags and PMX_MATERIAL_DRAW_BOTH_FACES) = 0)));
   if Assigned(Video^.SetMaterialShine) then
     Video^.SetMaterialShine(EnsureRange(Material.SpecularStrength, 0.0, 1.0));
 
@@ -168,7 +168,8 @@ begin
     begin
       MaterialIndex := KIRITAN_CORE_MATERIAL_ORDER[DrawOrderIndex];
       if MaterialIndex <= High(Model.Materials) then
-        DrawMaterial(Video, Model, Model.Materials[MaterialIndex]);
+        DrawMaterial(Video, Model, Model.Materials[MaterialIndex],
+          MaterialIndex <= 2);
     end;
     if Assigned(Video^.SetDefaultAnchor) then
       Video^.SetDefaultAnchor(640, 640);

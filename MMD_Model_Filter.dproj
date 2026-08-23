@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{E27FDC66-0DE2-4A8B-A4A3-B7E44A90A808}</ProjectGuid>
         <ProjectVersion>20.4</ProjectVersion>
@@ -37,6 +37,12 @@
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64)'!=''">
+        <Cfg_2_Win64>true</Cfg_2_Win64>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <GenDll>true</GenDll>
         <SanitizedProjectName>MMD_Model_Filter</SanitizedProjectName>
@@ -53,7 +59,14 @@
         <DCC_RangeChecking>true</DCC_RangeChecking>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
-        <Debugger_HostApplication>D:\aviutl2_v2.1.3a\aviutl2.exe</Debugger_HostApplication>
+        <Manifest_File>(なし)</Manifest_File>
+        <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
+        <DCC_ExeOutput>C:\ProgramData\aviutl2\Plugin\MMD</DCC_ExeOutput>
+        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;</PostBuildEvent>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+        <Debugger_HostApplication>D:\aviutl2_v2.1.6a\aviutl2.exe</Debugger_HostApplication>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <BT_BuildType>Release</BT_BuildType>
@@ -61,6 +74,16 @@
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
         <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
         <DCC_DebugInformation>0</DCC_DebugInformation>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
+        <Manifest_File>(なし)</Manifest_File>
+        <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
+        <DCC_ExeOutput>C:\ProgramData\aviutl2\Plugin\MMD</DCC_ExeOutput>
+        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot;</PostBuildEvent>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+        <Debugger_HostApplication>D:\aviutl2_v2.1.6a\aviutl2.exe</Debugger_HostApplication>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">

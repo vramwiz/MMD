@@ -82,6 +82,17 @@ type
     Num: Integer;
     FrameS: Integer;
     FrameE: Integer;
+    EffectLayer: Integer;
+    OriginFrame: Integer;
+  end;
+
+  POBJECT_IMAGE_PARAM = ^TOBJECT_IMAGE_PARAM;
+  TOBJECT_IMAGE_PARAM = record
+    X, Y, Z: Single;       // 基準座標。
+    RX, RY, RZ: Single;    // 回転角度。360.0で1回転。
+    SX, SY, SZ: Single;    // 拡大率。1.0で等倍。
+    CX, CY, CZ: Single;    // 基準座標からの相対中心座標。
+    Alpha: Single;         // 0.0から1.0の不透明度。
   end;
 
   TPIXEL_RGBA = packed record
@@ -89,7 +100,25 @@ type
   end;
   PPIXEL_RGBA = ^TPIXEL_RGBA;
 
+  TVERTEX_COLOR = record
+    X, Y, Z: Single;       // オブジェクトのローカル3D座標。
+    R, G, B, A: Single;    // 0.0から1.0の乗算済みアルファ色。
+  end;
+
   TFILTER_PROC_VIDEO_GET_TEX2D = function: Pointer; cdecl;
+  TGetOutputImageParamFunc = function(Obj: OBJECT_HANDLE; Offset: Double;
+    Param: POBJECT_IMAGE_PARAM; ParamSize: Integer): Byte; cdecl;
+  TGetImageObjectFunc = function(Layer: Integer;
+    Offset: Double): OBJECT_HANDLE; cdecl;
+  TDrawImageFunc = function(Resource: LPCWSTR; X, Y, Z, RX, RY, RZ,
+    SX, SY, SZ, Alpha: Single): Byte; cdecl;
+  TDrawPolyFunc = function(VertexType: Integer; VertexList: Pointer;
+    VertexNum: Integer; Resource: LPCWSTR): Byte; cdecl;
+  TSetDefaultAnchorProc = procedure(Width, Height: Integer); cdecl;
+  TSetBlendModeProc = procedure(BlendMode: Integer); cdecl;
+  TSetMaterialShineProc = procedure(Shine: Single); cdecl;
+  TSetSamplerModeProc = procedure(SamplerMode: Integer); cdecl;
+  TSetCullingStateProc = procedure(Culling: Byte); cdecl;
   PFILTER_PROC_VIDEO = ^TFILTER_PROC_VIDEO;
   TFILTER_PROC_VIDEO = record
     Scene: PSCENE_INFO;
@@ -98,10 +127,23 @@ type
     SetImageData: procedure(Buffer: PPIXEL_RGBA; Width, Height: Integer); cdecl;
     GetImageTexture2D: TFILTER_PROC_VIDEO_GET_TEX2D;
     GetFramebufferTexture2D: TFILTER_PROC_VIDEO_GET_TEX2D;
+    Edit: PEDIT_SECTION;
+    Param: POBJECT_IMAGE_PARAM;
+    GetOutputImageParam: TGetOutputImageParamFunc;
+    GetImageObject: TGetImageObjectFunc;
+    DrawImage: TDrawImageFunc;
+    DrawPoly: TDrawPolyFunc;
+    SetDefaultAnchor: TSetDefaultAnchorProc;
+    SetBlendMode: TSetBlendModeProc;
+    SetMaterialShine: TSetMaterialShineProc;
+    SetSamplerMode: TSetSamplerModeProc;
+    SetCullingState: TSetCullingStateProc;
   end;
 
   TFuncProcVideo = function(Video: PFILTER_PROC_VIDEO): Byte; cdecl;
   TFuncProcAudio = function(Audio: Pointer): Byte; cdecl;
+  TFuncCreate = function(EffectID: Int64): Pointer; cdecl;
+  TFuncDestroy = procedure(EffectID: Int64; UserData: Pointer); cdecl;
 
   TFILTER_ITEM_STRING = record
     ItemType: LPCWSTR;
@@ -162,11 +204,16 @@ type
     Items: ^Pointer;
     Func_Proc_Video: TFuncProcVideo;
     Func_Proc_Audio: TFuncProcAudio;
+    Func_Create: TFuncCreate;
+    Func_Destroy: TFuncDestroy;
   end;
 
 const
   FILTER_FLAG_VIDEO = 1;
+  FILTER_FLAG_INPUT = 4;
   FILTER_FLAG_FILTER = 8;
+  VERTEX_TYPE_TRIANGLE_COLOR = 1;
+  VERTEX_TYPE_QUAD_COLOR = 5;
 
 implementation
 

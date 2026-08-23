@@ -69,6 +69,8 @@ begin
   GTable.Items := @GItems[0];
   GTable.Func_Proc_Video := VideoProc;
   GTable.Func_Proc_Audio := AudioProc;
+  GTable.Func_Create := nil;
+  GTable.Func_Destroy := nil;
 end;
 
 procedure AddFile(var Item: TFILTER_ITEM_FILE; Name, Value, FileFilter: PWideChar);

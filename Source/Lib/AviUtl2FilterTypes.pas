@@ -105,6 +105,25 @@ type
     R, G, B, A: Single;    // 0.0から1.0の乗算済みアルファ色。
   end;
 
+  TVERTEX_TEXTURE = record
+    X, Y, Z: Single;       // オブジェクトのローカル3D座標。
+    U, V: Single;          // 0.0から1.0の正規化テクスチャ座標。
+    A: Single;             // 0.0から1.0の頂点アルファ。
+  end;
+
+  TVERTEX_COLOR_NORM = record
+    X, Y, Z: Single;       // オブジェクトのローカル3D座標。
+    R, G, B, A: Single;    // 0.0から1.0の乗算済みアルファ色。
+    VX, VY, VZ: Single;    // 法線ベクトル。
+  end;
+
+  TVERTEX_TEXTURE_NORM = record
+    X, Y, Z: Single;       // オブジェクトのローカル3D座標。
+    U, V: Single;          // 0.0から1.0の正規化テクスチャ座標。
+    A: Single;             // 0.0から1.0の頂点アルファ。
+    VX, VY, VZ: Single;    // 法線ベクトル。
+  end;
+
   TFILTER_PROC_VIDEO_GET_TEX2D = function: Pointer; cdecl;
   TGetOutputImageParamFunc = function(Obj: OBJECT_HANDLE; Offset: Double;
     Param: POBJECT_IMAGE_PARAM; ParamSize: Integer): Byte; cdecl;
@@ -119,6 +138,9 @@ type
   TSetMaterialShineProc = procedure(Shine: Single); cdecl;
   TSetSamplerModeProc = procedure(SamplerMode: Integer); cdecl;
   TSetCullingStateProc = procedure(Culling: Byte); cdecl;
+  TSetBillboardModeProc = procedure(BillboardMode: Integer); cdecl;
+  TCreateImageResourceProc = procedure(Resource: LPCWSTR;
+    Buffer: PPIXEL_RGBA; Width, Height: Integer); cdecl;
   PFILTER_PROC_VIDEO = ^TFILTER_PROC_VIDEO;
   TFILTER_PROC_VIDEO = record
     Scene: PSCENE_INFO;
@@ -138,6 +160,8 @@ type
     SetMaterialShine: TSetMaterialShineProc;
     SetSamplerMode: TSetSamplerModeProc;
     SetCullingState: TSetCullingStateProc;
+    SetBillboardMode: TSetBillboardModeProc;
+    CreateImageResource: TCreateImageResourceProc;
   end;
 
   TFuncProcVideo = function(Video: PFILTER_PROC_VIDEO): Byte; cdecl;
@@ -213,7 +237,12 @@ const
   FILTER_FLAG_INPUT = 4;
   FILTER_FLAG_FILTER = 8;
   VERTEX_TYPE_TRIANGLE_COLOR = 1;
+  VERTEX_TYPE_TRIANGLE_COLOR_NORM = 2;
+  VERTEX_TYPE_TRIANGLE_TEXTURE = 3;
+  VERTEX_TYPE_TRIANGLE_TEXTURE_NORM = 4;
   VERTEX_TYPE_QUAD_COLOR = 5;
+  SAMPLER_MODE_LOOP = 2;
+  SAMPLER_MODE_DOT = 4;
 
 implementation
 

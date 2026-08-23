@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{E27FDC66-0DE2-4A8B-A4A3-B7E44A90A808}</ProjectGuid>
         <ProjectVersion>20.4</ProjectVersion>
@@ -62,11 +62,11 @@
         <Manifest_File>(なし)</Manifest_File>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
         <DCC_ExeOutput>C:\ProgramData\aviutl2\Plugin\MMD</DCC_ExeOutput>
-        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEvent><![CDATA[if not exist "C:\ProgramData\aviutl2\Plugin\MMD" mkdir "C:\ProgramData\aviutl2\Plugin\MMD"]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
-        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;</PostBuildEvent>
+        <PostBuildEvent><![CDATA[copy /Y "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll" "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2"]]></PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
-        <Debugger_HostApplication>D:\aviutl2_v2.1.6a\aviutl2.exe</Debugger_HostApplication>
+        <Debugger_HostApplication>D:\aviutl2_v2.1.3a\aviutl2.exe</Debugger_HostApplication>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <BT_BuildType>Release</BT_BuildType>
@@ -79,9 +79,9 @@
         <Manifest_File>(なし)</Manifest_File>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
         <DCC_ExeOutput>C:\ProgramData\aviutl2\Plugin\MMD</DCC_ExeOutput>
-        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEvent><![CDATA[if not exist "C:\ProgramData\aviutl2\Plugin\MMD" mkdir "C:\ProgramData\aviutl2\Plugin\MMD"]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
-        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot;</PostBuildEvent>
+        <PostBuildEvent><![CDATA[copy /Y "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll" "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2"&&if exist "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll" del /Q "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll"&&if exist "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm" del /Q "C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm"]]></PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
         <Debugger_HostApplication>D:\aviutl2_v2.1.6a\aviutl2.exe</Debugger_HostApplication>
     </PropertyGroup>
@@ -90,6 +90,8 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Source\Lib\AviUtl2FilterTypes.pas"/>
+        <DCCReference Include="Source\Lib\MMD\PmxModel.pas"/>
+        <DCCReference Include="Source\Lib\MMD\PmxReader.pas"/>
         <DCCReference Include="Source\Lib\FilterTable\PluginFilterTable.pas"/>
         <DCCReference Include="Source\Plugin\Model\MMD_Model_FilterPlugin.pas"/>
         <BuildConfiguration Include="Base">
@@ -123,4 +125,20 @@
     <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
+    <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win64'">
+        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;</PostBuildEvent>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win64'">
+        <PreBuildEvent>if not exist &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot; mkdir &quot;C:\ProgramData\aviutl2\Plugin\MMD&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent>copy /Y &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).auf2&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).dll&quot;&amp;&amp;if exist &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot; del /Q &quot;C:\ProgramData\aviutl2\Plugin\MMD\$(PROJECTNAME).rsm&quot;</PostBuildEvent>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
 </Project>

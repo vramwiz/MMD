@@ -6,6 +6,8 @@
 
 uses
   AviUtl2FilterTypes in 'Source\Lib\AviUtl2FilterTypes.pas',
+  PmxModel in 'Source\Lib\MMD\PmxModel.pas',
+  PmxReader in 'Source\Lib\MMD\PmxReader.pas',
   PluginFilterTable in 'Source\Lib\FilterTable\PluginFilterTable.pas',
   MMD_Model_FilterPlugin in 'Source\Plugin\Model\MMD_Model_FilterPlugin.pas';
 

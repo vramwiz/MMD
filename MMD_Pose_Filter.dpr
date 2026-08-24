@@ -17,6 +17,7 @@ uses
   PmxBoneReader in 'Source\Lib\MMD\IO\PmxBoneReader.pas',
   MmdD3DScene in 'Source\Lib\MMD\Editor\D3D\MmdD3DScene.pas',
   MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
+  MmdD3DTextures in 'Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas',
   MmdD3DRenderer in 'Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas',
   MmdD3DViewport in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas',
   MmdPoseEditor in 'Source\Lib\MMD\Editor\MmdPoseEditor.pas',

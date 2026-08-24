@@ -15,6 +15,7 @@ type
   private
     FImpl: TObject;
     function GetErrorText: string;
+    function GetLoadedTextureCount: Integer;
   public
     // 指定した子ウィンドウ専用のDeviceとSwapChainを生成する。失敗内容はErrorTextへ保持する。
     constructor Create(Window: HWND; Width, Height: Integer);
@@ -28,6 +29,7 @@ type
     // 頂点バッファを変更せず、シェーダーへ渡すカメラ定数だけを更新する。
     procedure SetCamera(const Camera: TMmdPreviewCamera);
     property ErrorText: string read GetErrorText;
+    property LoadedTextureCount: Integer read GetLoadedTextureCount;
   end;
 
 implementation
@@ -40,12 +42,14 @@ uses
   Winapi.DxgiType,
   System.Math,
   System.SysUtils,
-  MmdD3DShaders;
+  MmdD3DShaders,
+  MmdD3DTextures;
 
 type
   TMmdD3DRendererImpl = class
   private
     FContext: ID3D11DeviceContext;
+    FBlendState: ID3D11BlendState;
     FCamera: TMmdPreviewCamera;
     FDepthTexture: ID3D11Texture2D;
     FDepthView: ID3D11DepthStencilView;
@@ -59,7 +63,10 @@ type
     FShaders: TMmdD3DShaders;
     FSwapChain: IDXGISwapChain;
     FTriangleBuffer: ID3D11Buffer;
+    FTriangleBatches: TMmdPreviewBatches;
     FTriangleCount: Cardinal;
+    FTextureModel: TPmxModel;
+    FTextures: TMmdD3DTextures;
     FViewHeight: Integer;
     FViewWidth: Integer;
     procedure CreateDevice(Window: HWND);
@@ -73,6 +80,7 @@ type
     procedure Resize(Width, Height: Integer);
     procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses; SelectedBone: Integer);
     procedure SetCamera(const Camera: TMmdPreviewCamera);
+    function GetLoadedTextureCount: Integer;
     property ErrorText: string read FErrorText;
   end;
 
@@ -105,7 +113,9 @@ begin
   ReleaseRenderTargets;
   FLineBuffer := nil;
   FTriangleBuffer := nil;
+  FTextures.Free;
   FShaders.Free;
+  FBlendState := nil;
   FRasterizerState := nil;
   FSwapChain := nil;
   FContext := nil;
@@ -117,6 +127,7 @@ procedure TMmdD3DRendererImpl.CreateDevice(Window: HWND);
 var
   Desc: TDXGISwapChainDesc;
   FeatureLevel: D3D_FEATURE_LEVEL;
+  BlendDesc: TD3D11_BLEND_DESC;
   RasterDesc: TD3D11_RASTERIZER_DESC;
 begin
   FillChar(Desc, SizeOf(Desc), 0);
@@ -138,6 +149,18 @@ begin
   RasterDesc.DepthClipEnable := True;
   CheckHR(FDevice.CreateRasterizerState(RasterDesc, FRasterizerState),
     'CreateRasterizerState');
+  FillChar(BlendDesc, SizeOf(BlendDesc), 0);
+  BlendDesc.RenderTarget[0].BlendEnable := True;
+  BlendDesc.RenderTarget[0].SrcBlend := D3D11_BLEND_SRC_ALPHA;
+  BlendDesc.RenderTarget[0].DestBlend := D3D11_BLEND_INV_SRC_ALPHA;
+  BlendDesc.RenderTarget[0].BlendOp := D3D11_BLEND_OP_ADD;
+  BlendDesc.RenderTarget[0].SrcBlendAlpha := D3D11_BLEND_ONE;
+  BlendDesc.RenderTarget[0].DestBlendAlpha := D3D11_BLEND_INV_SRC_ALPHA;
+  BlendDesc.RenderTarget[0].BlendOpAlpha := D3D11_BLEND_OP_ADD;
+  BlendDesc.RenderTarget[0].RenderTargetWriteMask :=
+    Byte(D3D11_COLOR_WRITE_ENABLE_ALL);
+  CheckHR(FDevice.CreateBlendState(BlendDesc, FBlendState),
+    'CreateBlendState');
 end;
 
 procedure TMmdD3DRendererImpl.CreateRenderTargets;
@@ -230,9 +253,16 @@ begin
     BuildPreviewScene(Model, Poses, SelectedBone, Scene);
     FTriangleBuffer := CreateVertexBuffer(Scene.Triangles);
     FTriangleCount := Length(Scene.Triangles);
+    FTriangleBatches := Copy(Scene.Batches);
     FLineBuffer := CreateVertexBuffer(Scene.BoneLines);
     FLineCount := Length(Scene.BoneLines);
     FProjection := Scene.Projection;
+    if FTextureModel <> Model then
+    begin
+      FreeAndNil(FTextures);
+      FTextures := TMmdD3DTextures.Create(FDevice, Model);
+      FTextureModel := Model;
+    end;
     FShaders.UpdateCamera(FContext, FCamera, FProjection, FViewWidth,
       FViewHeight);
     FErrorText := '';
@@ -250,9 +280,19 @@ begin
       FViewHeight);
 end;
 
+function TMmdD3DRendererImpl.GetLoadedTextureCount: Integer;
+begin
+  if FTextures = nil then
+    Result := 0
+  else
+    Result := FTextures.LoadedCount;
+end;
+
 procedure TMmdD3DRendererImpl.Render;
 var
   ClearColor: TFourSingleArray;
+  BlendFactor: TFourSingleArray;
+  Batch: TMmdPreviewBatch;
   Offset: Cardinal;
   Stride: Cardinal;
   Viewport: TD3D11_VIEWPORT;
@@ -266,6 +306,8 @@ begin
   FContext.ClearRenderTargetView(FRenderTarget, ClearColor);
   FContext.ClearDepthStencilView(FDepthView, D3D11_CLEAR_DEPTH, 1.0, 0);
   FContext.OMSetRenderTargets(1, FRenderTarget, FDepthView);
+  FillChar(BlendFactor, SizeOf(BlendFactor), 0);
+  FContext.OMSetBlendState(FBlendState, BlendFactor, $FFFFFFFF);
   Viewport := TD3D11_VIEWPORT.Create(FDepthTexture, FRenderTarget);
   FContext.RSSetViewports(1, @Viewport);
   FContext.RSSetState(FRasterizerState);
@@ -276,12 +318,17 @@ begin
   begin
     FContext.IASetVertexBuffers(0, 1, FTriangleBuffer, @Stride, @Offset);
     FContext.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    FContext.Draw(FTriangleCount, 0);
+    for Batch in FTriangleBatches do
+    begin
+      FTextures.Bind(FContext, Batch.TextureIndex);
+      FContext.Draw(Batch.VertexCount, Batch.FirstVertex);
+    end;
   end;
   if (FLineBuffer <> nil) and (FLineCount > 0) then
   begin
     // 編集対象の確認を優先し、モデルに隠れる骨格も常に前面へ重ねる。
     FContext.ClearDepthStencilView(FDepthView, D3D11_CLEAR_DEPTH, 1.0, 0);
+    FTextures.Bind(FContext, -1);
     FContext.IASetVertexBuffers(0, 1, FLineBuffer, @Stride, @Offset);
     FContext.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
     FContext.Draw(FLineCount, 0);
@@ -304,6 +351,11 @@ end;
 function TMmdD3DRenderer.GetErrorText: string;
 begin
   Result := TMmdD3DRendererImpl(FImpl).ErrorText;
+end;
+
+function TMmdD3DRenderer.GetLoadedTextureCount: Integer;
+begin
+  Result := TMmdD3DRendererImpl(FImpl).GetLoadedTextureCount;
 end;
 
 procedure TMmdD3DRenderer.Render;

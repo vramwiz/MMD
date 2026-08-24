@@ -12,8 +12,17 @@ type
   TMmdPreviewVertex = packed record
     X, Y, Z: Single;
     R, G, B, A: Single;
+    U, V: Single;
+    NormalX, NormalY, NormalZ: Single;
+    Lighting: Single;
   end;
   TMmdPreviewVertices = array of TMmdPreviewVertex;
+  TMmdPreviewBatch = record
+    FirstVertex: Integer;
+    VertexCount: Integer;
+    TextureIndex: Integer;
+  end;
+  TMmdPreviewBatches = array of TMmdPreviewBatch;
   TMmdPreviewProjection = record
     ModelWidth: Single;
     ModelHeight: Single;
@@ -21,6 +30,7 @@ type
   end;
   TMmdPreviewScene = record
     Triangles: TMmdPreviewVertices;
+    Batches: TMmdPreviewBatches;
     BoneLines: TMmdPreviewVertices;
     Projection: TMmdPreviewProjection;
   end;
@@ -83,7 +93,8 @@ begin
 end;
 
 procedure SetVertex(var Vertex: TMmdPreviewVertex; const Position,
-  Center: TPmxVector3; R, G, B, A: Single);
+  Center: TPmxVector3; const UV: TPmxVector2; const Normal: TPmxVector3;
+  Lighting, R, G, B, A: Single);
 begin
   Vertex.X := Position.X - Center.X;
   Vertex.Y := Position.Y - Center.Y;
@@ -92,6 +103,12 @@ begin
   Vertex.G := G;
   Vertex.B := B;
   Vertex.A := A;
+  Vertex.U := UV.X;
+  Vertex.V := UV.Y;
+  Vertex.NormalX := Normal.X;
+  Vertex.NormalY := Normal.Y;
+  Vertex.NormalZ := Normal.Z;
+  Vertex.Lighting := Lighting;
 end;
 
 procedure CalculateBounds(const Vertices: TPmxSkinnedVertices;
@@ -116,39 +133,47 @@ end;
 
 procedure BuildTriangles(const Model: TPmxModel;
   const Skinned: TPmxSkinnedVertices; const Center: TPmxVector3;
-  out Vertices: TMmdPreviewVertices);
+  out Vertices: TMmdPreviewVertices; out Batches: TMmdPreviewBatches);
 var
+  BatchCount: Integer;
   IndexOffset: Integer;
   Material: TPmxMaterial;
   MaterialIndex: Integer;
   Normal: TPmxVector3;
   Position: TPmxVector3;
-  Shade: Single;
   SourceIndex: Integer;
   VertexIndex: Integer;
 begin
   SetLength(Vertices, Length(Model.Indices));
+  SetLength(Batches, Length(Model.Materials));
   VertexIndex := 0;
+  BatchCount := 0;
   for MaterialIndex := 0 to High(Model.Materials) do
   begin
     Material := Model.Materials[MaterialIndex];
     if Material.Diffuse.W <= 0.0001 then
       Continue;
+    Batches[BatchCount].FirstVertex := VertexIndex;
+    Batches[BatchCount].TextureIndex := Material.TextureIndex;
     for IndexOffset := 0 to Material.SurfaceCount - 1 do
     begin
       SourceIndex := Model.Indices[Material.SurfaceStart + IndexOffset];
       Position := Skinned[SourceIndex].Position;
       Normal := Skinned[SourceIndex].Normal;
-      Shade := EnsureRange(0.35 + 0.65 * Abs(
-        Normal.X * 0.25 + Normal.Y * 0.55 - Normal.Z * 0.8), 0.2, 1.0);
       SetVertex(Vertices[VertexIndex], Position, Center,
-        EnsureRange(Material.Diffuse.X * Shade, 0.0, 1.0),
-        EnsureRange(Material.Diffuse.Y * Shade, 0.0, 1.0),
-        EnsureRange(Material.Diffuse.Z * Shade, 0.0, 1.0), 1.0);
+        Model.Vertices[SourceIndex].UV, Normal, 1.0,
+        EnsureRange(Material.Diffuse.X, 0.0, 1.0),
+        EnsureRange(Material.Diffuse.Y, 0.0, 1.0),
+        EnsureRange(Material.Diffuse.Z, 0.0, 1.0),
+        EnsureRange(Material.Diffuse.W, 0.0, 1.0));
       Inc(VertexIndex);
     end;
+    Batches[BatchCount].VertexCount :=
+      VertexIndex - Batches[BatchCount].FirstVertex;
+    Inc(BatchCount);
   end;
   SetLength(Vertices, VertexIndex);
+  SetLength(Batches, BatchCount);
 end;
 
 procedure BuildBoneLines(const Model: TPmxModel;
@@ -159,7 +184,11 @@ var
   BoneIndex: Integer;
   ParentIndex: Integer;
   VertexIndex: Integer;
+  EmptyUV: TPmxVector2;
+  EmptyNormal: TPmxVector3;
 begin
+  EmptyUV := Default(TPmxVector2);
+  EmptyNormal := Default(TPmxVector3);
   SetLength(Vertices, Length(Model.Bones) * 2);
   VertexIndex := 0;
   for BoneIndex := 0 to High(Model.Bones) do
@@ -180,10 +209,10 @@ begin
       B := 1.0;
     end;
     SetVertex(Vertices[VertexIndex], Transforms[ParentIndex].Position,
-      Center, R, G, B, 1.0);
+      Center, EmptyUV, EmptyNormal, 0.0, R, G, B, 1.0);
     Inc(VertexIndex);
     SetVertex(Vertices[VertexIndex], Transforms[BoneIndex].Position,
-      Center, R, G, B, 1.0);
+      Center, EmptyUV, EmptyNormal, 0.0, R, G, B, 1.0);
     Inc(VertexIndex);
   end;
   SetLength(Vertices, VertexIndex);
@@ -213,7 +242,7 @@ begin
   Scene.Projection.Radius := Max(0.5 * Sqrt(
     Sqr(Scene.Projection.ModelWidth) + Sqr(Scene.Projection.ModelHeight) +
     Sqr(Depth)), 0.001);
-  BuildTriangles(Model, Skinned, Center, Scene.Triangles);
+  BuildTriangles(Model, Skinned, Center, Scene.Triangles, Scene.Batches);
   BuildBoneLines(Model, Transforms, Center, SelectedBone, Scene.BoneLines);
 end;
 

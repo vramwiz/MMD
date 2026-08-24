@@ -104,9 +104,6 @@ Group2=1
 縦横比=0.000
 透明度=0.00
 合成モード=通常
-[layer.0]
-layer=3
-hide=1
 [3]
 layer=3
 focus=1

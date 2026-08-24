@@ -24,6 +24,7 @@ type
     FRenderer: TMmdD3DRenderer;
     FSelectedBone: Integer;
     function GetErrorText: string;
+    function GetLoadedTextureCount: Integer;
     procedure RebuildScene;
     procedure UpdateCamera;
   protected
@@ -43,6 +44,7 @@ type
     procedure SetScene(AModel: TPmxModel; const APoses: TPmxBonePoses;
       ASelectedBone: Integer);
     property ErrorText: string read GetErrorText;
+    property LoadedTextureCount: Integer read GetLoadedTextureCount;
   end;
 
 implementation
@@ -190,6 +192,14 @@ begin
     Result := 'Direct3Dを初期化できませんでした。'
   else
     Result := FRenderer.ErrorText;
+end;
+
+function TMmdD3DViewport.GetLoadedTextureCount: Integer;
+begin
+  if FRenderer = nil then
+    Result := 0
+  else
+    Result := FRenderer.LoadedTextureCount;
 end;
 
 end.

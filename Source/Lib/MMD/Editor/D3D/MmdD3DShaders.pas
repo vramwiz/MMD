@@ -46,13 +46,23 @@ const
   SHADER_SOURCE: AnsiString =
     'cbuffer C:register(b0){float sy;float cy;float sp;float cp;' +
     'float sx;float scaleY;float ds;float pad;};' +
-    'struct I{float3 p:POSITION;float4 c:COLOR;};' +
-    'struct O{float4 p:SV_POSITION;float4 c:COLOR;};' +
+    'Texture2D tex:register(t0);SamplerState sam:register(s0);' +
+    'struct I{float3 p:POSITION;float4 c:COLOR;float2 uv:TEXCOORD;' +
+    'float3 n:NORMAL;float lighting:LIGHTFACTOR;};' +
+    'struct O{float4 p:SV_POSITION;float4 c:COLOR;float2 uv:TEXCOORD;' +
+    'float shade:LIGHTFACTOR;};' +
     'O VSMain(I v){O o;float x=v.p.x*cy+v.p.z*sy;' +
     'float z=-v.p.x*sy+v.p.z*cy;' +
     'float y=v.p.y*cp-z*sp;z=v.p.y*sp+z*cp;' +
-    'o.p=float4(x*sx,y*scaleY,0.5+z*ds,1);o.c=v.c;return o;}' +
-    'float4 PSMain(O i):SV_TARGET{return i.c;}';
+    'float nx=v.n.x*cy+v.n.z*sy;float nz=-v.n.x*sy+v.n.z*cy;' +
+    'float ny=v.n.y*cp-nz*sp;nz=v.n.y*sp+nz*cp;' +
+    'float diffuse=saturate(dot(normalize(float3(nx,ny,nz)),' +
+    'normalize(float3(0,0.28,-0.96))));' +
+    'o.p=float4(x*sx,y*scaleY,0.5+z*ds,1);o.c=v.c;o.uv=v.uv;' +
+    'o.shade=lerp(1.0,0.62+0.38*diffuse,saturate(v.lighting));return o;}' +
+    'float4 PSMain(O i):SV_TARGET{float4 c=tex.Sample(sam,i.uv)*i.c;' +
+    'c.rgb*=i.shade;' +
+    'clip(c.a-0.01);return c;}';
 
 procedure CheckHR(Value: HRESULT; const Operation: string);
 begin
@@ -64,7 +74,7 @@ constructor TMmdD3DShaders.Create(const Device: ID3D11Device);
 var
   BufferDesc: TD3D11_BUFFER_DESC;
   Errors: ID3DBlob;
-  InputElements: array[0..1] of TD3D11_INPUT_ELEMENT_DESC;
+  InputElements: array[0..4] of TD3D11_INPUT_ELEMENT_DESC;
   PixelCode: ID3DBlob;
   VertexCode: ID3DBlob;
 begin
@@ -82,6 +92,18 @@ begin
   InputElements[1].Format := DXGI_FORMAT_R32G32B32A32_FLOAT;
   InputElements[1].AlignedByteOffset := 12;
   InputElements[1].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
+  InputElements[2].SemanticName := 'TEXCOORD';
+  InputElements[2].Format := DXGI_FORMAT_R32G32_FLOAT;
+  InputElements[2].AlignedByteOffset := 28;
+  InputElements[2].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
+  InputElements[3].SemanticName := 'NORMAL';
+  InputElements[3].Format := DXGI_FORMAT_R32G32B32_FLOAT;
+  InputElements[3].AlignedByteOffset := 36;
+  InputElements[3].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
+  InputElements[4].SemanticName := 'LIGHTFACTOR';
+  InputElements[4].Format := DXGI_FORMAT_R32_FLOAT;
+  InputElements[4].AlignedByteOffset := 48;
+  InputElements[4].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
   CheckHR(Device.CreateInputLayout(@InputElements[0], Length(InputElements),
     VertexCode.GetBufferPointer, VertexCode.GetBufferSize, FInputLayout),
     'CreateInputLayout');

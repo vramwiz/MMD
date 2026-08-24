@@ -7,6 +7,9 @@ uses
   AviUtl2FilterTypes in 'Source\Lib\AviUtl2FilterTypes.pas',
   MmdPoseSharedMemory in 'Source\Lib\MMD\IPC\MmdPoseSharedMemory.pas',
   PmxModel in 'Source\Lib\MMD\Core\PmxModel.pas',
+  PmxPoseTypes in 'Source\Lib\MMD\Core\PmxPoseTypes.pas',
+  PmxPoseMath in 'Source\Lib\MMD\Core\PmxPoseMath.pas',
+  PmxBoneSolver in 'Source\Lib\MMD\Core\PmxBoneSolver.pas',
   PmxPose in 'Source\Lib\MMD\Core\PmxPose.pas',
   PmxPoseCodec in 'Source\Lib\MMD\IO\PmxPoseCodec.pas',
   MMD_Model_Context in 'Source\Plugin\Model\Context\MMD_Model_Context.pas';

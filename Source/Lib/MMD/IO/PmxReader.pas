@@ -19,7 +19,8 @@ uses
   PmxBinaryStream,
   PmxBoneReader,
   PmxGeometryReader,
-  PmxMaterialReader;
+  PmxMaterialReader,
+  PmxMorphReader;
 
 var
   ModelCache: TObjectDictionary<string, TPmxModel>;
@@ -40,6 +41,7 @@ begin
       ReadPmxTextures(Stream, Result);
       ReadPmxMaterials(Stream, Result);
       ReadPmxBones(Stream, Result);
+      ReadPmxMorphs(Stream, Result);
     except
       Result.Free;
       raise;

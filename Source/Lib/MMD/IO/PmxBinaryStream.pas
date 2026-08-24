@@ -17,7 +17,10 @@ type
     FBoneIndexSize: Byte;
     FData: TBytes;
     FEncoding: TEncoding;
+    FMaterialIndexSize: Byte;
+    FMorphIndexSize: Byte;
     FOffset: Integer;
+    FRigidBodyIndexSize: Byte;
     FTextureIndexSize: Byte;
     FVertexIndexSize: Byte;
   public
@@ -44,6 +47,9 @@ type
     property AdditionalUVCount: Byte read FAdditionalUVCount write FAdditionalUVCount;
     property BoneIndexSize: Byte read FBoneIndexSize write FBoneIndexSize;
     property Encoding: TEncoding read FEncoding write FEncoding;
+    property MaterialIndexSize: Byte read FMaterialIndexSize write FMaterialIndexSize;
+    property MorphIndexSize: Byte read FMorphIndexSize write FMorphIndexSize;
+    property RigidBodyIndexSize: Byte read FRigidBodyIndexSize write FRigidBodyIndexSize;
     property TextureIndexSize: Byte read FTextureIndexSize write FTextureIndexSize;
     property VertexIndexSize: Byte read FVertexIndexSize write FVertexIndexSize;
 end;

@@ -12,35 +12,47 @@ implementation
 
 uses
   Winapi.Windows,
+  System.Classes,
   System.Math,
   System.SysUtils,
-  Vcl.Controls,
-  Vcl.ExtCtrls,
+  System.UITypes,
   Vcl.Forms,
-  Vcl.StdCtrls,
-  MmdD3DViewport,
+  MmdPoseEditOperations,
+  MmdPoseEditorLayout,
+  MmdPoseHistory,
+  MmdPoseSymmetry,
   PmxModel,
   PmxPose,
   PmxPoseCodec,
   PmxReader;
 
 type
-  TStandardPoseEditorForm = class(TForm)
+  TStandardPoseEditorForm = class(TMmdPoseEditorFormBase)
   private
-    FBoneList: TListBox;
-    FEdits: array[0..5] of TEdit;
+    FHistory: TMmdPoseHistory;
     FModel: TPmxModel;
-    FViewport: TMmdD3DViewport;
     FPoses: TPmxBonePoses;
     procedure ApplyClick(Sender: TObject);
     procedure BoneChanged(Sender: TObject);
     procedure ResetAllClick(Sender: TObject);
+    procedure ResetBranchClick(Sender: TObject);
     procedure ResetBoneClick(Sender: TObject);
+    procedure RedoClick(Sender: TObject);
+    procedure SymmetryChanged(Sender: TObject);
+    procedure UndoClick(Sender: TObject);
+    procedure ViewportBoneSelected(Sender: TObject);
+    procedure ViewportPoseChanged(Sender: TObject);
+    procedure ViewportPoseEditFinished(Sender: TObject);
+    procedure ViewportPoseEditStarted(Sender: TObject);
     procedure LoadSelectedBone;
     procedure SaveSelectedBone;
+    procedure UpdateHistoryButtons;
+  protected
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
   public
     constructor CreateEditor(const ModelFileName, PoseData,
       EditorCaption: string);
+    destructor Destroy; override;
     function EncodeCurrentPose: string;
   end;
 
@@ -72,100 +84,33 @@ end;
 
 constructor TStandardPoseEditorForm.CreateEditor(const ModelFileName,
   PoseData, EditorCaption: string);
-const
-  FIELD_NAMES: array[0..5] of string =
-    ('移動 X', '移動 Y', '移動 Z', '回転 X°', '回転 Y°', '回転 Z°');
 var
-  ApplyButton: TButton;
   BoneIndex: Integer;
-  ButtonPanel: TPanel;
-  CancelButton: TButton;
-  EditorPanel: TPanel;
-  Label_: TLabel;
   NamedPoses: TPmxNamedBonePoses;
-  OkButton: TButton;
-  ResetAllButton: TButton;
-  ResetBoneButton: TButton;
-  Row: Integer;
 begin
-  inherited CreateNew(nil);
-  Caption := EditorCaption;
-  Position := poScreenCenter;
-  Width := 980;
-  Height := 680;
-  Constraints.MinWidth := 800;
-  Constraints.MinHeight := 520;
-  BorderStyle := bsSizeable;
+  inherited CreateLayout(EditorCaption);
+  FHistory := TMmdPoseHistory.Create;
 
   FModel := GetCachedPmxModel(ModelFileName);
   InitializeBonePoses(FModel, FPoses);
   if TryDecodePoseData(PoseData, NamedPoses) then
     ApplyNamedBonePoses(FModel, NamedPoses, FPoses);
 
-  FBoneList := TListBox.Create(Self);
-  FBoneList.Parent := Self;
-  FBoneList.Align := alLeft;
-  FBoneList.Width := 245;
   FBoneList.OnClick := BoneChanged;
   for BoneIndex := 0 to High(FModel.Bones) do
     FBoneList.Items.Add(FModel.Bones[BoneIndex].Name);
 
-  EditorPanel := TPanel.Create(Self);
-  EditorPanel.Parent := Self;
-  EditorPanel.Align := alRight;
-  EditorPanel.Width := 235;
-  EditorPanel.BevelOuter := bvNone;
-  for Row := 0 to 5 do
-  begin
-    Label_ := TLabel.Create(Self);
-    Label_.Parent := EditorPanel;
-    Label_.Caption := FIELD_NAMES[Row];
-    Label_.Left := 16;
-    Label_.Top := 20 + Row * 48;
-    FEdits[Row] := TEdit.Create(Self);
-    FEdits[Row].Parent := EditorPanel;
-    FEdits[Row].Left := 95;
-    FEdits[Row].Top := 16 + Row * 48;
-    FEdits[Row].Width := 120;
-  end;
-
-  ApplyButton := TButton.Create(Self);
-  ApplyButton.Parent := EditorPanel;
-  ApplyButton.Caption := '選択ボーンへ適用';
-  ApplyButton.SetBounds(16, 316, 199, 32);
-  ApplyButton.OnClick := ApplyClick;
-  ResetBoneButton := TButton.Create(Self);
-  ResetBoneButton.Parent := EditorPanel;
-  ResetBoneButton.Caption := '選択ボーンを初期化';
-  ResetBoneButton.SetBounds(16, 356, 199, 32);
-  ResetBoneButton.OnClick := ResetBoneClick;
-  ResetAllButton := TButton.Create(Self);
-  ResetAllButton.Parent := EditorPanel;
-  ResetAllButton.Caption := '全ボーンを初期化';
-  ResetAllButton.SetBounds(16, 396, 199, 32);
-  ResetAllButton.OnClick := ResetAllClick;
-
-  ButtonPanel := TPanel.Create(Self);
-  ButtonPanel.Parent := EditorPanel;
-  ButtonPanel.Align := alBottom;
-  ButtonPanel.Height := 55;
-  ButtonPanel.BevelOuter := bvNone;
-  OkButton := TButton.Create(Self);
-  OkButton.Parent := ButtonPanel;
-  OkButton.Caption := 'OK';
-  OkButton.ModalResult := mrOk;
-  OkButton.Default := True;
-  OkButton.SetBounds(16, 10, 95, 32);
-  CancelButton := TButton.Create(Self);
-  CancelButton.Parent := ButtonPanel;
-  CancelButton.Caption := 'キャンセル';
-  CancelButton.ModalResult := mrCancel;
-  CancelButton.Cancel := True;
-  CancelButton.SetBounds(120, 10, 95, 32);
-
-  FViewport := TMmdD3DViewport.Create(Self);
-  FViewport.Parent := Self;
-  FViewport.Align := alClient;
+  FApplyButton.OnClick := ApplyClick;
+  FResetBoneButton.OnClick := ResetBoneClick;
+  FResetBranchButton.OnClick := ResetBranchClick;
+  FResetAllButton.OnClick := ResetAllClick;
+  FSymmetryCheck.OnClick := SymmetryChanged;
+  FUndoButton.OnClick := UndoClick;
+  FRedoButton.OnClick := RedoClick;
+  FViewport.OnBoneSelected := ViewportBoneSelected;
+  FViewport.OnPoseChanged := ViewportPoseChanged;
+  FViewport.OnPoseEditFinished := ViewportPoseEditFinished;
+  FViewport.OnPoseEditStarted := ViewportPoseEditStarted;
 
   if FBoneList.Count > 0 then
   begin
@@ -173,6 +118,91 @@ begin
     LoadSelectedBone;
     FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
   end;
+  UpdateHistoryButtons;
+end;
+
+destructor TStandardPoseEditorForm.Destroy;
+begin
+  FHistory.Free;
+  inherited Destroy;
+end;
+
+procedure TStandardPoseEditorForm.SymmetryChanged(Sender: TObject);
+begin
+  FViewport.SymmetricEditing := FSymmetryCheck.Checked;
+end;
+
+procedure TStandardPoseEditorForm.UpdateHistoryButtons;
+begin
+  FUndoButton.Enabled := FHistory.CanUndo;
+  FRedoButton.Enabled := FHistory.CanRedo;
+end;
+
+procedure TStandardPoseEditorForm.ViewportPoseEditStarted(Sender: TObject);
+begin
+  FHistory.RecordBeforeEdit(FPoses);
+  UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.ViewportPoseEditFinished(Sender: TObject);
+begin
+  UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.UndoClick(Sender: TObject);
+var
+  Restored: TPmxBonePoses;
+begin
+  if not FHistory.Undo(FPoses, Restored) then
+    Exit;
+  FPoses := Restored;
+  LoadSelectedBone;
+  FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+  UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.RedoClick(Sender: TObject);
+var
+  Restored: TPmxBonePoses;
+begin
+  if not FHistory.Redo(FPoses, Restored) then
+    Exit;
+  FPoses := Restored;
+  LoadSelectedBone;
+  FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+  UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+  if ssCtrl in Shift then
+    case Key of
+      Ord('Z'):
+        begin
+          UndoClick(Self);
+          Key := 0;
+          Exit;
+        end;
+      Ord('Y'):
+        begin
+          RedoClick(Self);
+          Key := 0;
+          Exit;
+        end;
+    end;
+  inherited KeyDown(Key, Shift);
+end;
+
+procedure TStandardPoseEditorForm.ViewportBoneSelected(Sender: TObject);
+begin
+  FBoneList.ItemIndex := FViewport.SelectedBone;
+  FBoneList.TopIndex := Max(FBoneList.ItemIndex - 5, 0);
+  LoadSelectedBone;
+end;
+
+procedure TStandardPoseEditorForm.ViewportPoseChanged(Sender: TObject);
+begin
+  FViewport.CopyPoses(FPoses);
 end;
 
 procedure TStandardPoseEditorForm.LoadSelectedBone;
@@ -213,10 +243,22 @@ begin
 end;
 
 procedure TStandardPoseEditorForm.ApplyClick(Sender: TObject);
+var
+  BeforePoses: TPmxBonePoses;
+  MirrorIndex: Integer;
 begin
   try
+    BeforePoses := Copy(FPoses);
     SaveSelectedBone;
+    if FSymmetryCheck.Checked then
+    begin
+      MirrorIndex := FindSymmetricBone(FModel, FBoneList.ItemIndex);
+      if MirrorIndex >= 0 then
+        FPoses[MirrorIndex] := MirrorBonePose(FPoses[FBoneList.ItemIndex]);
+    end;
+    FHistory.RecordBeforeEdit(BeforePoses);
     FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+    UpdateHistoryButtons;
   except
     on E: Exception do
       Application.MessageBox(PChar(E.Message), '入力エラー', MB_OK or MB_ICONWARNING);
@@ -230,20 +272,58 @@ begin
 end;
 
 procedure TStandardPoseEditorForm.ResetBoneClick(Sender: TObject);
+var
+  BeforePoses: TPmxBonePoses;
+  MirrorIndex: Integer;
 begin
   if FBoneList.ItemIndex < 0 then
     Exit;
+  BeforePoses := Copy(FPoses);
   FPoses[FBoneList.ItemIndex] := Default(TPmxBonePose);
   FPoses[FBoneList.ItemIndex].Rotation := IdentityQuaternion;
+  if FSymmetryCheck.Checked then
+  begin
+    MirrorIndex := FindSymmetricBone(FModel, FBoneList.ItemIndex);
+    if MirrorIndex >= 0 then
+      FPoses[MirrorIndex] := MirrorBonePose(FPoses[FBoneList.ItemIndex]);
+  end;
+  FHistory.RecordBeforeEdit(BeforePoses);
   LoadSelectedBone;
   FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+  UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.ResetBranchClick(Sender: TObject);
+var
+  BeforePoses: TPmxBonePoses;
+  MirrorIndex: Integer;
+begin
+  if FBoneList.ItemIndex < 0 then
+    Exit;
+  BeforePoses := Copy(FPoses);
+  ResetBoneBranch(FModel, FBoneList.ItemIndex, FPoses);
+  if FSymmetryCheck.Checked then
+  begin
+    MirrorIndex := FindSymmetricBone(FModel, FBoneList.ItemIndex);
+    if MirrorIndex >= 0 then
+      ResetBoneBranch(FModel, MirrorIndex, FPoses);
+  end;
+  FHistory.RecordBeforeEdit(BeforePoses);
+  LoadSelectedBone;
+  FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+  UpdateHistoryButtons;
 end;
 
 procedure TStandardPoseEditorForm.ResetAllClick(Sender: TObject);
+var
+  BeforePoses: TPmxBonePoses;
 begin
+  BeforePoses := Copy(FPoses);
   InitializeBonePoses(FModel, FPoses);
+  FHistory.RecordBeforeEdit(BeforePoses);
   LoadSelectedBone;
   FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
+  UpdateHistoryButtons;
 end;
 
 function TStandardPoseEditorForm.EncodeCurrentPose: string;

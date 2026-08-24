@@ -39,13 +39,15 @@ uses
 type
   TMmdCameraConstants = packed record
     SinYaw, CosYaw, SinPitch, CosPitch: Single;
-    ScaleX, ScaleY, DepthScale, Padding: Single;
+    ScaleX, ScaleY, DepthScale, PanX: Single;
+    PanY, Padding1, Padding2, Padding3: Single;
   end;
 
 const
   SHADER_SOURCE: AnsiString =
     'cbuffer C:register(b0){float sy;float cy;float sp;float cp;' +
-    'float sx;float scaleY;float ds;float pad;};' +
+    'float sx;float scaleY;float ds;float px;' +
+    'float py;float pad1;float pad2;float pad3;};' +
     'Texture2D tex:register(t0);SamplerState sam:register(s0);' +
     'struct I{float3 p:POSITION;float4 c:COLOR;float2 uv:TEXCOORD;' +
     'float3 n:NORMAL;float lighting:LIGHTFACTOR;};' +
@@ -58,8 +60,8 @@ const
     'float ny=v.n.y*cp-nz*sp;nz=v.n.y*sp+nz*cp;' +
     'float diffuse=saturate(dot(normalize(float3(nx,ny,nz)),' +
     'normalize(float3(0,0.28,-0.96))));' +
-    'o.p=float4(x*sx,y*scaleY,0.5+z*ds,1);o.c=v.c;o.uv=v.uv;' +
-    'o.shade=lerp(1.0,0.62+0.38*diffuse,saturate(v.lighting));return o;}' +
+    'o.p=float4(x*sx+px,y*scaleY+py,0.5+z*ds,1);o.c=v.c;o.uv=v.uv;' +
+    'o.shade=lerp(1.0,0.68+0.42*diffuse,saturate(v.lighting));return o;}' +
     'float4 PSMain(O i):SV_TARGET{float4 c=tex.Sample(sam,i.uv)*i.c;' +
     'c.rgb*=i.shade;' +
     'clip(c.a-0.01);return c;}';
@@ -146,7 +148,11 @@ begin
   Constants.ScaleX := 2.0 * PixelScale / ViewWidth;
   Constants.ScaleY := 2.0 * PixelScale / ViewHeight;
   Constants.DepthScale := 0.45 / Max(Projection.Radius, 0.001);
-  Constants.Padding := 0;
+  Constants.PanX := Camera.PanX * 2.0 / ViewWidth;
+  Constants.PanY := -Camera.PanY * 2.0 / ViewHeight;
+  Constants.Padding1 := 0;
+  Constants.Padding2 := 0;
+  Constants.Padding3 := 0;
   Context.UpdateSubresource(FCameraBuffer, 0, nil, @Constants, 0, 0);
 end;
 

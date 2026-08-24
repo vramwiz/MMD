@@ -1,6 +1,6 @@
 ﻿unit PmxBoneReader;
 
-// PMXボーンとIK付加情報を読み飛ばしつつ、階層と頂点Weightを検証する。
+// PMXボーン、付与変形、IKリンクを読み込み、参照と頂点Weightを検証する。
 
 interface
 
@@ -20,55 +20,60 @@ uses
 const
   MAX_BONE_COUNT = 1000000;
   MAX_IK_LINK_COUNT = 1000000;
-  BONE_FLAG_TAIL_IS_BONE = $0001;
-  BONE_FLAG_IK = $0020;
-  BONE_FLAG_INHERIT_ROTATION = $0100;
-  BONE_FLAG_INHERIT_TRANSLATION = $0200;
-  BONE_FLAG_FIXED_AXIS = $0400;
-  BONE_FLAG_LOCAL_COORDINATE = $0800;
-  BONE_FLAG_EXTERNAL_PARENT = $2000;
+  MAX_IK_LOOP_COUNT = 1000000;
 
-procedure ReadBoneOptionalData(Stream: TPmxBinaryStream; Flags: Word);
+function IsFiniteVector(const Value: TPmxVector3): Boolean;
+begin
+  Result := not IsNan(Value.X) and not IsInfinite(Value.X) and
+    not IsNan(Value.Y) and not IsInfinite(Value.Y) and
+    not IsNan(Value.Z) and not IsInfinite(Value.Z);
+end;
+
+procedure ReadBoneOptionalData(Stream: TPmxBinaryStream; var Bone: TPmxBone);
 var
   HasLimits: Byte;
   J, LinkCount: Integer;
 begin
-  if (Flags and BONE_FLAG_TAIL_IS_BONE) <> 0 then
+  if (Bone.Flags and PMX_BONE_FLAG_TAIL_IS_BONE) <> 0 then
     Stream.ReadSignedIndex(Stream.BoneIndexSize)
   else
     Stream.ReadVector3;
-  if (Flags and (BONE_FLAG_INHERIT_ROTATION or
-    BONE_FLAG_INHERIT_TRANSLATION)) <> 0 then
+  if (Bone.Flags and (PMX_BONE_FLAG_INHERIT_ROTATION or
+    PMX_BONE_FLAG_INHERIT_TRANSLATION)) <> 0 then
   begin
-    Stream.ReadSignedIndex(Stream.BoneIndexSize);
-    Stream.ReadSingle;
+    Bone.InheritParentIndex := Stream.ReadSignedIndex(Stream.BoneIndexSize);
+    Bone.InheritWeight := Stream.ReadSingle;
   end;
-  if (Flags and BONE_FLAG_FIXED_AXIS) <> 0 then
+  if (Bone.Flags and PMX_BONE_FLAG_FIXED_AXIS) <> 0 then
     Stream.ReadVector3;
-  if (Flags and BONE_FLAG_LOCAL_COORDINATE) <> 0 then
+  if (Bone.Flags and PMX_BONE_FLAG_LOCAL_COORDINATE) <> 0 then
   begin
     Stream.ReadVector3;
     Stream.ReadVector3;
   end;
-  if (Flags and BONE_FLAG_EXTERNAL_PARENT) <> 0 then
+  if (Bone.Flags and PMX_BONE_FLAG_EXTERNAL_PARENT) <> 0 then
     Stream.ReadInt32;
-  if (Flags and BONE_FLAG_IK) = 0 then
+  if (Bone.Flags and PMX_BONE_FLAG_IK) = 0 then
     Exit;
-  Stream.ReadSignedIndex(Stream.BoneIndexSize);
-  Stream.ReadInt32;
-  Stream.ReadSingle;
+  Bone.IkTargetIndex := Stream.ReadSignedIndex(Stream.BoneIndexSize);
+  Bone.IkLoopCount := Stream.ReadInt32;
+  CheckPmxCount(Bone.IkLoopCount, MAX_IK_LOOP_COUNT, 'IK loop count');
+  Bone.IkAngleLimit := Stream.ReadSingle;
   LinkCount := Stream.ReadInt32;
   CheckPmxCount(LinkCount, MAX_IK_LINK_COUNT, 'IK link count');
+  SetLength(Bone.IkLinks, LinkCount);
   for J := 0 to LinkCount - 1 do
   begin
-    Stream.ReadSignedIndex(Stream.BoneIndexSize);
+    Bone.IkLinks[J].BoneIndex :=
+      Stream.ReadSignedIndex(Stream.BoneIndexSize);
     HasLimits := Stream.ReadByte;
     case HasLimits of
-      0: ;
+      0: Bone.IkLinks[J].HasLimits := False;
       1:
         begin
-          Stream.ReadVector3;
-          Stream.ReadVector3;
+          Bone.IkLinks[J].HasLimits := True;
+          Bone.IkLinks[J].LimitMin := Stream.ReadVector3;
+          Bone.IkLinks[J].LimitMax := Stream.ReadVector3;
         end;
     else
       raise EPmxFormatError.CreateFmt('Invalid PMX IK limit flag: %d',
@@ -79,15 +84,55 @@ end;
 
 procedure ValidateBoneReferences(const Model: TPmxModel);
 var
+  Bone: TPmxBone;
   BoneCount, I, J: Integer;
+  Link: TPmxIkLink;
   WeightSum: Single;
 begin
   BoneCount := Length(Model.Bones);
   for I := 0 to BoneCount - 1 do
+  begin
+    Bone := Model.Bones[I];
     if (Model.Bones[I].ParentIndex < -1) or
       (Model.Bones[I].ParentIndex >= BoneCount) then
       raise EPmxFormatError.CreateFmt('PMX parent bone index is out of range: %d',
         [Model.Bones[I].ParentIndex]);
+    if (Bone.Flags and (PMX_BONE_FLAG_INHERIT_ROTATION or
+      PMX_BONE_FLAG_INHERIT_TRANSLATION)) <> 0 then
+    begin
+      if (Bone.InheritParentIndex < 0) or
+        (Bone.InheritParentIndex >= BoneCount) then
+        raise EPmxFormatError.CreateFmt(
+          'PMX inherit parent bone index is out of range: %d',
+          [Bone.InheritParentIndex]);
+      if IsNan(Bone.InheritWeight) or IsInfinite(Bone.InheritWeight) then
+        raise EPmxFormatError.Create('PMX inherit weight is not finite');
+    end;
+    if (Bone.Flags and PMX_BONE_FLAG_IK) <> 0 then
+    begin
+      if (Bone.IkTargetIndex < 0) or (Bone.IkTargetIndex >= BoneCount) then
+        raise EPmxFormatError.CreateFmt(
+          'PMX IK target bone index is out of range: %d',
+          [Bone.IkTargetIndex]);
+      if IsNan(Bone.IkAngleLimit) or IsInfinite(Bone.IkAngleLimit) or
+        (Bone.IkAngleLimit < 0) then
+        raise EPmxFormatError.Create('PMX IK angle limit is invalid');
+      for Link in Bone.IkLinks do
+      begin
+        if (Link.BoneIndex < 0) or (Link.BoneIndex >= BoneCount) then
+          raise EPmxFormatError.CreateFmt(
+            'PMX IK link bone index is out of range: %d', [Link.BoneIndex]);
+        if Link.HasLimits and
+          (not IsFiniteVector(Link.LimitMin) or
+          not IsFiniteVector(Link.LimitMax) or
+          (Link.LimitMin.X > Link.LimitMax.X) or
+          (Link.LimitMin.Y > Link.LimitMax.Y) or
+          (Link.LimitMin.Z > Link.LimitMax.Z)) then
+          raise EPmxFormatError.Create(
+            'PMX IK link angle limits are invalid');
+      end;
+    end;
+  end;
   for I := 0 to High(Model.Vertices) do
   begin
     WeightSum := 0.0;
@@ -130,9 +175,11 @@ begin
     Stream.ReadText;
     Model.Bones[I].Position := Stream.ReadVector3;
     Model.Bones[I].ParentIndex := Stream.ReadSignedIndex(Stream.BoneIndexSize);
-    Stream.ReadInt32;
+    Model.Bones[I].DeformLayer := Stream.ReadInt32;
     Model.Bones[I].Flags := Stream.ReadUInt16;
-    ReadBoneOptionalData(Stream, Model.Bones[I].Flags);
+    Model.Bones[I].InheritParentIndex := -1;
+    Model.Bones[I].IkTargetIndex := -1;
+    ReadBoneOptionalData(Stream, Model.Bones[I]);
   end;
   ValidateBoneReferences(Model);
 end;

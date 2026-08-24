@@ -30,6 +30,13 @@ const
   PMX_DEFORM_SDEF = 3;
   PMX_DEFORM_QDEF = 4;
 
+procedure CheckIndexSize(Value: Byte; const FieldName: string);
+begin
+  if not (Value in [1, 2, 4]) then
+    raise EPmxFormatError.CreateFmt('Unsupported PMX %s index size: %d',
+      [FieldName, Value]);
+end;
+
 procedure ReadPmxHeader(Stream: TPmxBinaryStream; Model: TPmxModel);
 var
   EncodingKind: Byte;
@@ -61,10 +68,16 @@ begin
       [Stream.AdditionalUVCount]);
   Stream.VertexIndexSize := Stream.ReadByte;
   Stream.TextureIndexSize := Stream.ReadByte;
-  Stream.ReadByte;
+  Stream.MaterialIndexSize := Stream.ReadByte;
   Stream.BoneIndexSize := Stream.ReadByte;
-  Stream.ReadByte;
-  Stream.ReadByte;
+  Stream.MorphIndexSize := Stream.ReadByte;
+  Stream.RigidBodyIndexSize := Stream.ReadByte;
+  CheckIndexSize(Stream.VertexIndexSize, 'vertex');
+  CheckIndexSize(Stream.TextureIndexSize, 'texture');
+  CheckIndexSize(Stream.MaterialIndexSize, 'material');
+  CheckIndexSize(Stream.BoneIndexSize, 'bone');
+  CheckIndexSize(Stream.MorphIndexSize, 'morph');
+  CheckIndexSize(Stream.RigidBodyIndexSize, 'rigid body');
   for I := 8 to HeaderSize - 1 do
     Stream.ReadByte;
   Model.Name := Stream.ReadText;

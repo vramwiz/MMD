@@ -50,13 +50,78 @@ type
     SurfaceCount: Integer;
   end;
 
+  TPmxIkLink = record
+    BoneIndex: Integer;
+    HasLimits: Boolean;
+    LimitMin: TPmxVector3;
+    LimitMax: TPmxVector3;
+  end;
+  TPmxIkLinks = array of TPmxIkLink;
+
   TPmxBone = record
     Name: string;
     Position: TPmxVector3;
     ParentIndex: Integer;
+    DeformLayer: Integer;
     Flags: Word;
+    InheritParentIndex: Integer;
+    InheritWeight: Single;
+    IkTargetIndex: Integer;
+    IkLoopCount: Integer;
+    IkAngleLimit: Single;
+    IkLinks: TPmxIkLinks;
   end;
 
+  TPmxMorphType = (
+    pmtGroup,
+    pmtVertex,
+    pmtBone,
+    pmtUV,
+    pmtAdditionalUV1,
+    pmtAdditionalUV2,
+    pmtAdditionalUV3,
+    pmtAdditionalUV4,
+    pmtMaterial,
+    pmtFlip,
+    pmtImpulse
+  );
+
+  TPmxGroupMorphOffset = record
+    MorphIndex: Integer;
+    Weight: Single;
+  end;
+
+  TPmxVertexMorphOffset = record
+    VertexIndex: Integer;
+    Offset: TPmxVector3;
+  end;
+
+  TPmxBoneMorphOffset = record
+    BoneIndex: Integer;
+    Translation: TPmxVector3;
+    Rotation: TPmxVector4;
+  end;
+
+  TPmxMorph = record
+    Name: string;
+    Panel: Byte;
+    MorphType: TPmxMorphType;
+    GroupOffsets: TArray<TPmxGroupMorphOffset>;
+    VertexOffsets: TArray<TPmxVertexMorphOffset>;
+    BoneOffsets: TArray<TPmxBoneMorphOffset>;
+  end;
+
+const
+  PMX_BONE_FLAG_TAIL_IS_BONE = $0001;
+  PMX_BONE_FLAG_IK = $0020;
+  PMX_BONE_FLAG_LOCAL_APPEND = $0080;
+  PMX_BONE_FLAG_INHERIT_ROTATION = $0100;
+  PMX_BONE_FLAG_INHERIT_TRANSLATION = $0200;
+  PMX_BONE_FLAG_FIXED_AXIS = $0400;
+  PMX_BONE_FLAG_LOCAL_COORDINATE = $0800;
+  PMX_BONE_FLAG_EXTERNAL_PARENT = $2000;
+
+type
   TPmxModel = class
   public
     SourcePath: string;
@@ -67,6 +132,7 @@ type
     TextureAvailable: TArray<Boolean>;
     Materials: TArray<TPmxMaterial>;
     Bones: TArray<TPmxBone>;
+    Morphs: TArray<TPmxMorph>;
   end;
 
 implementation

@@ -15,6 +15,7 @@
         <GenDll>true</GenDll>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\DCU</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_UnitSearchPath>Source\Lib\MMD\Editor;Source\Lib\MMD\Editor\D3D;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;Vcl;$(DCC_Namespace)</DCC_Namespace>
         <SanitizedProjectName>MMD_Model_Filter</SanitizedProjectName>
     </PropertyGroup>
@@ -91,6 +92,10 @@
         </DelphiCompile>
         <DCCReference Include="Source\Lib\AviUtl2FilterTypes.pas"/>
         <DCCReference Include="Source\Lib\MMD\Core\PmxModel.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Core\PmxPoseTypes.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Core\PmxPoseMath.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Core\PmxMorph.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Core\PmxBoneSolver.pas"/>
         <DCCReference Include="Source\Lib\MMD\Core\PmxPose.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxPoseCodec.pas"/>
         <DCCReference Include="Source\Lib\MMD\IPC\MmdPoseSharedMemory.pas"/>
@@ -99,6 +104,7 @@
         <DCCReference Include="Source\Lib\MMD\IO\PmxGeometryReader.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxMaterialReader.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxBoneReader.pas"/>
+        <DCCReference Include="Source\Lib\MMD\IO\PmxMorphReader.pas"/>
         <DCCReference Include="Source\Lib\FilterTable\PluginFilterTable.pas"/>
         <DCCReference Include="Source\Plugin\Model\MMD_Model_FilterPlugin.pas"/>
         <DCCReference Include="Source\Plugin\Model\Context\MMD_Model_Context.pas"/>
@@ -106,10 +112,21 @@
         <DCCReference Include="Source\Plugin\Model\Render\MMD_Model_Renderer.pas"/>
         <DCCReference Include="Source\Plugin\Model\Editor\MMD_Model_StandardPoseButton.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DScene.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DSelection.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DInteraction.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DShapes.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DBuffers.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DOverlay.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DDevice.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseSymmetry.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DViewportSurface.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseHistory.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditOperations.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditorLayout.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditor.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

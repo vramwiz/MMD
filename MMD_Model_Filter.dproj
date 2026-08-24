@@ -120,12 +120,15 @@
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DDevice.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DDeform.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseSymmetry.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DViewportSurface.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\Temporary\MmdD3DLiveDragTest.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseHistory.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditOperations.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdMorphPreviewPanel.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditorLayout.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditor.pas"/>
         <BuildConfiguration Include="Base">

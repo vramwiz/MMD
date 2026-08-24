@@ -8,6 +8,7 @@ uses
   System.Classes,
   Vcl.Controls,
   PmxModel,
+  PmxMorph,
   PmxPose,
   MmdD3DRenderer,
   MmdD3DScene;
@@ -21,6 +22,7 @@ type
     FCamera: TMmdPreviewCamera;
     FHoverTarget: TMmdPreviewTarget;
     FModel: TPmxModel;
+    FMorphWeights: TPmxMorphWeights;
     FPoses: TPmxBonePoses;
     FRenderer: TMmdD3DRenderer;
     FSelectedTarget: TMmdPreviewTarget;
@@ -38,6 +40,8 @@ type
     // 子ウィンドウ生成前のカメラ、選択値、背景描画属性を初期化する。
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // 保存対象外の確認用モーフ係数を設定し、モデル本体を再構築する。
+    procedure SetMorphWeights(const AWeights: TPmxMorphWeights);
     property Camera: TMmdPreviewCamera read FCamera;
     property ErrorText: string read GetErrorText;
     property LoadedTextureCount: Integer read GetLoadedTextureCount;
@@ -64,6 +68,15 @@ destructor TMmdD3DViewportSurface.Destroy;
 begin
   FRenderer.Free;
   inherited Destroy;
+end;
+
+procedure TMmdD3DViewportSurface.SetMorphWeights(
+  const AWeights: TPmxMorphWeights);
+begin
+  FMorphWeights := Copy(AWeights);
+  RebuildScene;
+  // TrackBar操作中もWM_PAINT待ちにせず、変更済みGPUバッファを即時表示する。
+  Update;
 end;
 
 procedure TMmdD3DViewportSurface.CreateWnd;
@@ -112,7 +125,8 @@ procedure TMmdD3DViewportSurface.RebuildScene;
 begin
   if (FRenderer <> nil) and (FModel <> nil) then
   begin
-    FRenderer.SetScene(FModel, FPoses, FSelectedTarget, FHoverTarget);
+    FRenderer.SetScene(FModel, FPoses, FMorphWeights, FSelectedTarget,
+      FHoverTarget);
     FRenderer.SetCamera(FCamera);
   end;
   Invalidate;
@@ -122,7 +136,8 @@ procedure TMmdD3DViewportSurface.RebuildSkeleton;
 begin
   if (FRenderer <> nil) and (FModel <> nil) then
   begin
-    FRenderer.SetSkeleton(FModel, FPoses, FSelectedTarget, FHoverTarget);
+    FRenderer.SetSkeleton(FModel, FPoses, FMorphWeights, FSelectedTarget,
+      FHoverTarget);
     FRenderer.SetCamera(FCamera);
   end;
   Invalidate;

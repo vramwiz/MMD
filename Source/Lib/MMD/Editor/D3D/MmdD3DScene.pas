@@ -6,6 +6,7 @@ interface
 
 uses
   PmxModel,
+  PmxMorph,
   PmxPose;
 
 type
@@ -67,16 +68,19 @@ type
 
 // CPUスキニングを行い、モデル中心を原点とするプレビュー頂点を構築する。
 procedure BuildPreviewScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-  const SelectedTarget, HoverTarget: TMmdPreviewTarget;
+  const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+  HoverTarget: TMmdPreviewTarget;
   out Scene: TMmdPreviewScene);
 // 初回に決めた中心と投影範囲を維持し、姿勢頂点と骨格だけを再構築する。
 procedure BuildPreviewSceneWithFrame(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget; const Center: TPmxVector3;
   const Projection: TMmdPreviewProjection; out Scene: TMmdPreviewScene);
 // モデル頂点を再生成せず、姿勢に追従する骨格線と関節位置だけを構築する。
 procedure BuildPreviewSkeleton(Model: TPmxModel; const Poses: TPmxBonePoses;
-  const SelectedTarget, HoverTarget: TMmdPreviewTarget;
+  const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+  HoverTarget: TMmdPreviewTarget;
   const Center: TPmxVector3; out BoneLines: TMmdPreviewVertices;
   out BoneSegments: TMmdPreviewBoneSegments; out Joints: TMmdPreviewJoints);
 // 対象なしを表す、各番号が-1の選択値を返す。
@@ -92,7 +96,7 @@ implementation
 
 uses
   System.Math,
-  PmxBoneSolver;
+  MmdD3DDeform;
 
 function DefaultPreviewCamera: TMmdPreviewCamera;
 begin
@@ -314,7 +318,8 @@ begin
 end;
 
 procedure BuildPreviewScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-  const SelectedTarget, HoverTarget: TMmdPreviewTarget;
+  const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+  HoverTarget: TMmdPreviewTarget;
   out Scene: TMmdPreviewScene);
 var
   BoundsMax, BoundsMin: TPmxVector3;
@@ -326,8 +331,7 @@ begin
   Scene := Default(TMmdPreviewScene);
   if (Model = nil) or (Length(Model.Vertices) = 0) then
     Exit;
-  CalculateBoneTransforms(Model, Poses, Transforms);
-  SkinVerticesLinear(Model, Transforms, Skinned);
+  DeformPreviewModel(Model, Poses, MorphWeights, Transforms, Skinned);
   CalculateBounds(Skinned, BoundsMin, BoundsMax);
   Center.X := (BoundsMin.X + BoundsMax.X) * 0.5;
   Center.Y := (BoundsMin.Y + BoundsMax.Y) * 0.5;
@@ -345,7 +349,8 @@ begin
 end;
 
 procedure BuildPreviewSceneWithFrame(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget; const Center: TPmxVector3;
   const Projection: TMmdPreviewProjection; out Scene: TMmdPreviewScene);
 var
@@ -355,8 +360,7 @@ begin
   Scene := Default(TMmdPreviewScene);
   if (Model = nil) or (Length(Model.Vertices) = 0) then
     Exit;
-  CalculateBoneTransforms(Model, Poses, Transforms);
-  SkinVerticesLinear(Model, Transforms, Skinned);
+  DeformPreviewModel(Model, Poses, MorphWeights, Transforms, Skinned);
   Scene.Center := Center;
   Scene.Projection := Projection;
   BuildTriangles(Model, Skinned, Center, Scene.Triangles, Scene.Batches);
@@ -365,7 +369,8 @@ begin
 end;
 
 procedure BuildPreviewSkeleton(Model: TPmxModel; const Poses: TPmxBonePoses;
-  const SelectedTarget, HoverTarget: TMmdPreviewTarget;
+  const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+  HoverTarget: TMmdPreviewTarget;
   const Center: TPmxVector3; out BoneLines: TMmdPreviewVertices;
   out BoneSegments: TMmdPreviewBoneSegments; out Joints: TMmdPreviewJoints);
 var
@@ -376,7 +381,7 @@ begin
   Joints := nil;
   if Model = nil then
     Exit;
-  CalculateInteractiveBoneTransforms(Model, Poses, Transforms);
+  CalculatePreviewSkeleton(Model, Poses, MorphWeights, Transforms);
   BuildBoneLines(Model, Transforms, Center, SelectedTarget, HoverTarget,
     BoneLines, BoneSegments, Joints);
 end;

@@ -14,6 +14,10 @@ const
   DISPLAY_MODE_BONES = 1;
   DISPLAY_MODE_BOTH = 2;
 
+// AviUtl2のポリゴン頂点枠に収まる場合は全材質、超える場合は優先材質を返す。
+function BuildPmxMaterialDrawOrder(const Model: TPmxModel;
+  ReservedVertexCount: Integer = 0): TArray<Integer>;
+
 // 指定表示モードに従って骨格と材質を描画する。Videoの描画状態と画像資源を更新する。
 procedure RenderPmxModel(Video: PFILTER_PROC_VIDEO; const Model: TPmxModel;
   const Transforms: TPmxBoneTransforms; const Skinned: TPmxSkinnedVertices;
@@ -31,17 +35,47 @@ type
   TTextureNormalVertices = array of TVERTEX_TEXTURE_NORM;
 
 const
-  PMX_MATERIAL_DRAW_BOTH_FACES = $01;
   PMX_BONE_IK = $0020;
   WHITE_PIXEL: TPIXEL_RGBA = (R: 255; G: 255; B: 255; A: 255);
   KIRITAN_CORE_MATERIAL_ORDER: array[0..20] of Integer = (
     0, 1, 2, 3, 4, 6, 12, 14, 15, 16, 28, 29, 30, 34, 35, 36, 9, 8, 11,
     13, 32);
+  AVIUTL2_POLYGON_VERTEX_LIMIT = 262144;
 
 threadvar
   BoneVertices: TBoneVertices;
   ColorVertices: TColorNormalVertices;
   TextureVertices: TTextureNormalVertices;
+
+function BuildPmxMaterialDrawOrder(const Model: TPmxModel;
+  ReservedVertexCount: Integer): TArray<Integer>;
+var
+  I, MaterialIndex, ResultCount: Integer;
+  RequiredVertexCount: Int64;
+begin
+  RequiredVertexCount := Max(0, ReservedVertexCount);
+  for I := 0 to High(Model.Materials) do
+    Inc(RequiredVertexCount, Max(0, Model.Materials[I].SurfaceCount));
+  if RequiredVertexCount <= AVIUTL2_POLYGON_VERTEX_LIMIT then
+  begin
+    SetLength(Result, Length(Model.Materials));
+    for I := 0 to High(Result) do
+      Result[I] := I;
+    Exit;
+  end;
+
+  SetLength(Result, Length(KIRITAN_CORE_MATERIAL_ORDER));
+  ResultCount := 0;
+  for I := 0 to High(KIRITAN_CORE_MATERIAL_ORDER) do
+  begin
+    MaterialIndex := KIRITAN_CORE_MATERIAL_ORDER[I];
+    if MaterialIndex > High(Model.Materials) then
+      Continue;
+    Result[ResultCount] := MaterialIndex;
+    Inc(ResultCount);
+  end;
+  SetLength(Result, ResultCount);
+end;
 
 function SourceIndexOffset(ExpandedOffset: Integer): Integer;
 begin
@@ -51,11 +85,6 @@ begin
   else
     Result := ExpandedOffset - 1;
   end;
-end;
-
-function NeedsDoubleSided(MaterialIndex: Integer): Boolean;
-begin
-  Result := (MaterialIndex <= 6) or (MaterialIndex = 28);
 end;
 
 procedure SetTransformedPosition(var X, Y, Z: Single;
@@ -251,16 +280,17 @@ end;
 
 procedure DrawMaterial(Video: PFILTER_PROC_VIDEO; const Model: TPmxModel;
   const Material: TPmxMaterial; const Skinned: TPmxSkinnedVertices;
-  UseSkinning: Boolean; InternalScale: Single; ForceDoubleSided: Boolean);
+  UseSkinning: Boolean; InternalScale: Single);
 var
   HasTexture: Boolean;
   Resource: string;
 begin
   if (Material.SurfaceCount = 0) or (Material.Diffuse.W <= 0.0001) then
     Exit;
+  // PMXには左右反転で頂点順が逆の部位を含むモデルがある。専用D3Dプレビューと
+  // 同じ両面描画に揃え、片側の手足や衣装が欠けないようにする。
   if Assigned(Video^.SetCullingState) then
-    Video^.SetCullingState(Ord(not ForceDoubleSided and
-      ((Material.Flags and PMX_MATERIAL_DRAW_BOTH_FACES) = 0)));
+    Video^.SetCullingState(0);
   if Assigned(Video^.SetMaterialShine) then
     Video^.SetMaterialShine(EnsureRange(Material.SpecularStrength, 0.0, 1.0));
   HasTexture := (Material.TextureIndex >= 0) and
@@ -278,7 +308,7 @@ begin
     BuildColorVertices(Model, Material, Skinned, UseSkinning, InternalScale,
       ColorVertices);
     Video^.DrawPoly(VERTEX_TYPE_TRIANGLE_COLOR_NORM, @ColorVertices[0],
-      Length(ColorVertices), nil);
+      Length(ColorVertices), 'object');
   end;
 end;
 
@@ -287,7 +317,8 @@ procedure RenderPmxModel(Video: PFILTER_PROC_VIDEO; const Model: TPmxModel;
   UseSkinning: Boolean; DisplayMode: Integer; InternalScale,
   BoneOffsetX: Single);
 var
-  DrawOrderIndex, MaterialIndex: Integer;
+  DrawOrder: TArray<Integer>;
+  DrawOrderIndex, MaterialIndex, ReservedVertexCount: Integer;
 begin
   if Assigned(Video^.SetSamplerMode) then
     Video^.SetSamplerMode(SAMPLER_MODE_LOOP);
@@ -295,16 +326,23 @@ begin
     DrawBones(Video, Model, Transforms, UseSkinning, InternalScale, 0.0)
   else
   begin
+    ReservedVertexCount := 0;
     if DisplayMode = DISPLAY_MODE_BOTH then
+    begin
       DrawBones(Video, Model, Transforms, UseSkinning, InternalScale,
         BoneOffsetX * InternalScale);
-    // 1オブジェクトの頂点上限内で主要部位を欠落させない検証済み順序を使う。
-    for DrawOrderIndex := 0 to High(KIRITAN_CORE_MATERIAL_ORDER) do
+      ReservedVertexCount := Length(BoneVertices);
+    end;
+    // 頂点枠内のモデルは材質番号に関係なく全て描き、大型モデルだけ
+    // 主要部位を欠落させない検証済み順序へフォールバックする。
+    DrawOrder := BuildPmxMaterialDrawOrder(Model, ReservedVertexCount);
+    if Assigned(Video^.SetImageData) then
+      Video^.SetImageData(@WHITE_PIXEL, 1, 1);
+    for DrawOrderIndex := 0 to High(DrawOrder) do
     begin
-      MaterialIndex := KIRITAN_CORE_MATERIAL_ORDER[DrawOrderIndex];
-      if MaterialIndex <= High(Model.Materials) then
-        DrawMaterial(Video, Model, Model.Materials[MaterialIndex], Skinned,
-          UseSkinning, InternalScale, NeedsDoubleSided(MaterialIndex));
+      MaterialIndex := DrawOrder[DrawOrderIndex];
+      DrawMaterial(Video, Model, Model.Materials[MaterialIndex], Skinned,
+        UseSkinning, InternalScale);
     end;
   end;
 end;

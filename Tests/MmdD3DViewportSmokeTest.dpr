@@ -33,8 +33,10 @@ uses
   MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
   MmdD3DTextures in 'Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas',
   MmdD3DDevice in 'Source\Lib\MMD\Editor\D3D\MmdD3DDevice.pas',
+  MmdD3DDeform in 'Source\Lib\MMD\Editor\D3D\MmdD3DDeform.pas',
   MmdD3DRenderer in 'Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas',
   MmdD3DViewportSurface in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewportSurface.pas',
+  MmdD3DLiveDragTest in 'Source\Lib\MMD\Editor\D3D\Temporary\MmdD3DLiveDragTest.pas',
   MmdD3DViewport in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas';
 
 var
@@ -87,7 +89,7 @@ var
   Scene: TMmdPreviewScene;
 begin
   Camera := DefaultPreviewCamera;
-  BuildPreviewScene(Model, Poses, EmptyPreviewTarget, EmptyPreviewTarget,
+  BuildPreviewScene(Model, Poses, nil, EmptyPreviewTarget, EmptyPreviewTarget,
     Scene);
   if Abs(PixelAspect(Scene, Camera, 160, 315) -
     PixelAspect(Scene, Camera, 315, 315)) > 0.001 then
@@ -128,7 +130,7 @@ begin
   PanCamera := BaseCamera;
   PanCamera.PanX := 40;
   PanCamera.PanY := 25;
-  BuildPreviewScene(Model, Poses, EmptyPreviewTarget, EmptyPreviewTarget,
+  BuildPreviewScene(Model, Poses, nil, EmptyPreviewTarget, EmptyPreviewTarget,
     Scene);
   BaseProjected := ProjectVertex(Scene.Triangles[0], Scene, BaseCamera, 315, 315);
   RotatedProjected := ProjectVertex(Scene.Triangles[0], Scene, RotatedCamera, 315, 315);
@@ -190,15 +192,15 @@ var
   AutoScene, FixedScene, InitialScene: TMmdPreviewScene;
   WorkPoses: TPmxBonePoses;
 begin
-  BuildPreviewScene(Model, Poses, EmptyPreviewTarget, EmptyPreviewTarget,
+  BuildPreviewScene(Model, Poses, nil, EmptyPreviewTarget, EmptyPreviewTarget,
     InitialScene);
   WorkPoses := Copy(Poses);
   WorkPoses[0].Translation.X := WorkPoses[0].Translation.X + 10;
-  BuildPreviewScene(Model, WorkPoses, EmptyPreviewTarget, EmptyPreviewTarget,
+  BuildPreviewScene(Model, WorkPoses, nil, EmptyPreviewTarget, EmptyPreviewTarget,
     AutoScene);
   if Abs(AutoScene.Center.X - InitialScene.Center.X) < 0.1 then
     raise Exception.Create('fixed-frame test pose did not move model bounds');
-  BuildPreviewSceneWithFrame(Model, WorkPoses, EmptyPreviewTarget,
+  BuildPreviewSceneWithFrame(Model, WorkPoses, nil, EmptyPreviewTarget,
     EmptyPreviewTarget, InitialScene.Center, InitialScene.Projection,
     FixedScene);
   if (Abs(FixedScene.Center.X - InitialScene.Center.X) > 0.0001) or
@@ -248,7 +250,7 @@ begin
   Viewport.SetScene(Model, Poses, 0);
   Camera := DefaultPreviewCamera;
   Found := False;
-  BuildPreviewScene(Model, Poses, EmptyPreviewTarget, EmptyPreviewTarget,
+  BuildPreviewScene(Model, Poses, nil, EmptyPreviewTarget, EmptyPreviewTarget,
     Scene);
   MouseX := -1;
   MouseY := -1;
@@ -292,7 +294,7 @@ var
   AfterPoses, BeforePoses, LockedPoses: TPmxBonePoses;
   Camera: TMmdPreviewCamera;
   Dx, Dy: Single;
-  Elapsed, Started: UInt64;
+  Elapsed, MaxElapsed, Started: UInt64;
   EndPoint, StartPoint: TPmxVector3;
   Found: Boolean;
   I, MouseX, MouseY, PoseBoneIndex: Integer;
@@ -303,7 +305,7 @@ begin
   Viewport.SetScene(Model, Poses, 0);
   Viewport.CopyPoses(BeforePoses);
   Camera := DefaultPreviewCamera;
-  BuildPreviewScene(Model, BeforePoses, EmptyPreviewTarget,
+  BuildPreviewScene(Model, BeforePoses, nil, EmptyPreviewTarget,
     EmptyPreviewTarget, Scene);
   Found := False;
   MouseX := -1;
@@ -370,7 +372,11 @@ begin
   SendMessage(Viewport.Handle, WM_LBUTTONUP, 0,
     MakeLParam(MouseX + 25, MouseY + 10));
   Elapsed := GetTickCount64 - Started;
-  if Elapsed > 500 then
+  if TEMPORARY_LIVE_MODEL_DRAG_TEST then
+    MaxElapsed := 10000
+  else
+    MaxElapsed := 500;
+  if Elapsed > MaxElapsed then
     raise Exception.CreateFmt('bone drag is too slow: %d ms', [Elapsed]);
   Viewport.CopyPoses(AfterPoses);
   if (Abs(AfterPoses[PoseBoneIndex].Rotation.X -
@@ -636,7 +642,7 @@ begin
   SelectedTarget.BoneIndex := BoneIndex;
   SelectedTarget.JointIndex := Model.Bones[BoneIndex].ParentIndex;
   HoverTarget := EmptyPreviewTarget;
-  BuildPreviewScene(Model, Poses, SelectedTarget, HoverTarget, Scene);
+  BuildPreviewScene(Model, Poses, nil, SelectedTarget, HoverTarget, Scene);
   BuildPreviewBoneShapes(Scene.Joints, Scene.BoneSegments, SelectedTarget,
     HoverTarget, Scene.Projection.ModelHeight, Scene.BoneShapes);
   OrangeCount := 0;
@@ -677,7 +683,7 @@ begin
       Viewport.Parent := Form;
       Viewport.Align := alClient;
       Model := GetCachedPmxModel(
-        'D:\DelphiProg\test\MMD\Model\ふらすこ式風きりたん_ver0.05\ふらすこ式風きりたん_ver0.05.pmx');
+        'D:\VoiceroidProj\MMD\ふらすこ式風きりたん_ver0.05\ふらすこ式風きりたん_ver0.05.pmx');
       InitializeBonePoses(Model, Poses);
       CheckPoseSymmetry(Model);
       CheckSelectionAppearance(Model, Poses);

@@ -22,6 +22,7 @@ uses
   MmdPoseHistory,
   MmdPoseSymmetry,
   PmxModel,
+  PmxMorph,
   PmxPose,
   PmxPoseCodec,
   PmxReader;
@@ -45,6 +46,7 @@ type
     procedure ViewportPoseEditFinished(Sender: TObject);
     procedure ViewportPoseEditStarted(Sender: TObject);
     procedure LoadSelectedBone;
+    procedure MorphWeightsChanged(Sender: TObject);
     procedure SaveSelectedBone;
     procedure UpdateHistoryButtons;
   protected
@@ -99,6 +101,8 @@ begin
   FBoneList.OnClick := BoneChanged;
   for BoneIndex := 0 to High(FModel.Bones) do
     FBoneList.Items.Add(FModel.Bones[BoneIndex].Name);
+  FMorphPreview.SetModel(FModel);
+  FMorphPreview.OnWeightsChanged := MorphWeightsChanged;
 
   FApplyButton.OnClick := ApplyClick;
   FResetBoneButton.OnClick := ResetBoneClick;
@@ -119,6 +123,14 @@ begin
     FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
   end;
   UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.MorphWeightsChanged(Sender: TObject);
+var
+  Weights: TPmxMorphWeights;
+begin
+  FMorphPreview.CopyWeights(Weights);
+  FViewport.SetMorphWeights(Weights);
 end;
 
 destructor TStandardPoseEditorForm.Destroy;

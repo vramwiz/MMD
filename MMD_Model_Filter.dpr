@@ -35,12 +35,15 @@ uses
   MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
   MmdD3DTextures in 'Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas',
   MmdD3DDevice in 'Source\Lib\MMD\Editor\D3D\MmdD3DDevice.pas',
+  MmdD3DDeform in 'Source\Lib\MMD\Editor\D3D\MmdD3DDeform.pas',
   MmdD3DRenderer in 'Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas',
   MmdPoseSymmetry in 'Source\Lib\MMD\Editor\MmdPoseSymmetry.pas',
   MmdD3DViewportSurface in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewportSurface.pas',
+  MmdD3DLiveDragTest in 'Source\Lib\MMD\Editor\D3D\Temporary\MmdD3DLiveDragTest.pas',
   MmdD3DViewport in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas',
   MmdPoseHistory in 'Source\Lib\MMD\Editor\MmdPoseHistory.pas',
   MmdPoseEditOperations in 'Source\Lib\MMD\Editor\MmdPoseEditOperations.pas',
+  MmdMorphPreviewPanel in 'Source\Lib\MMD\Editor\MmdMorphPreviewPanel.pas',
   MmdPoseEditorLayout in 'Source\Lib\MMD\Editor\MmdPoseEditorLayout.pas',
   MmdPoseEditor in 'Source\Lib\MMD\Editor\MmdPoseEditor.pas';
 

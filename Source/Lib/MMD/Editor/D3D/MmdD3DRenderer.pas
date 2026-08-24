@@ -7,6 +7,7 @@ interface
 uses
   Winapi.Windows,
   PmxModel,
+  PmxMorph,
   PmxPose,
   MmdD3DScene;
 
@@ -27,10 +28,12 @@ type
     procedure Resize(Width, Height: Integer);
     // 姿勢からCPU頂点を再生成し、このRendererだけが所有するGPUバッファへ置き換える。
     procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-      const SelectedTarget, HoverTarget: TMmdPreviewTarget);
+      const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+      HoverTarget: TMmdPreviewTarget);
     // モデル三角形を維持し、ドラッグ中の骨格と選択形状だけを更新する。
     procedure SetSkeleton(Model: TPmxModel; const Poses: TPmxBonePoses;
-      const SelectedTarget, HoverTarget: TMmdPreviewTarget);
+      const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+      HoverTarget: TMmdPreviewTarget);
     // 頂点バッファを変更せず、シェーダーへ渡すカメラ定数だけを更新する。
     procedure SetCamera(const Camera: TMmdPreviewCamera);
     // 現在のカメラ投影で指定画面座標にある関節またはボーン区間を返す。
@@ -88,9 +91,11 @@ type
     procedure Render;
     procedure Resize(Width, Height: Integer);
     procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-      const SelectedTarget, HoverTarget: TMmdPreviewTarget);
+      const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+      HoverTarget: TMmdPreviewTarget);
     procedure SetSkeleton(Model: TPmxModel; const Poses: TPmxBonePoses;
-      const SelectedTarget, HoverTarget: TMmdPreviewTarget);
+      const MorphWeights: TPmxMorphWeights; const SelectedTarget,
+      HoverTarget: TMmdPreviewTarget);
     procedure SetCamera(const Camera: TMmdPreviewCamera);
     function GetLoadedTextureCount: Integer;
     function GetProjection: TMmdPreviewProjection;
@@ -159,7 +164,8 @@ begin
 end;
 
 procedure TMmdD3DRendererImpl.SetScene(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget);
 var
   InitialFrame: Boolean;
@@ -170,10 +176,11 @@ begin
   try
     InitialFrame := (not FHasFrame) or (FFrameModel <> Model);
     if InitialFrame then
-      BuildPreviewScene(Model, Poses, SelectedTarget, HoverTarget, Scene)
+      BuildPreviewScene(Model, Poses, MorphWeights, SelectedTarget,
+        HoverTarget, Scene)
     else
-      BuildPreviewSceneWithFrame(Model, Poses, SelectedTarget, HoverTarget,
-        FCenter, FProjection, Scene);
+      BuildPreviewSceneWithFrame(Model, Poses, MorphWeights, SelectedTarget,
+        HoverTarget, FCenter, FProjection, Scene);
     BuildPreviewBoneShapes(Scene.Joints, Scene.BoneSegments, SelectedTarget,
       HoverTarget, Scene.Projection.ModelHeight, Scene.BoneShapes);
     UpdatePreviewVertexBuffer(FDevice, FContext, Scene.Triangles,
@@ -205,7 +212,8 @@ begin
 end;
 
 procedure TMmdD3DRendererImpl.SetSkeleton(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget);
 var
   BoneLines, BoneShapes: TMmdPreviewVertices;
@@ -215,8 +223,8 @@ begin
   if FDevice = nil then
     Exit;
   try
-    BuildPreviewSkeleton(Model, Poses, SelectedTarget, HoverTarget, FCenter,
-      BoneLines, Segments, Joints);
+    BuildPreviewSkeleton(Model, Poses, MorphWeights, SelectedTarget,
+      HoverTarget, FCenter, BoneLines, Segments, Joints);
     BuildPreviewBoneShapes(Joints, Segments, SelectedTarget, HoverTarget,
       FProjection.ModelHeight, BoneShapes);
     FOverlay.Update(FDevice, FContext, BoneLines, BoneShapes, Segments, Joints);
@@ -338,11 +346,12 @@ begin
 end;
 
 procedure TMmdD3DRenderer.SetScene(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget);
 begin
-  TMmdD3DRendererImpl(FImpl).SetScene(Model, Poses, SelectedTarget,
-    HoverTarget);
+  TMmdD3DRendererImpl(FImpl).SetScene(Model, Poses, MorphWeights,
+    SelectedTarget, HoverTarget);
 end;
 
 procedure TMmdD3DRenderer.SetCamera(const Camera: TMmdPreviewCamera);
@@ -351,11 +360,12 @@ begin
 end;
 
 procedure TMmdD3DRenderer.SetSkeleton(Model: TPmxModel;
-  const Poses: TPmxBonePoses; const SelectedTarget,
+  const Poses: TPmxBonePoses; const MorphWeights: TPmxMorphWeights;
+  const SelectedTarget,
   HoverTarget: TMmdPreviewTarget);
 begin
-  TMmdD3DRendererImpl(FImpl).SetSkeleton(Model, Poses, SelectedTarget,
-    HoverTarget);
+  TMmdD3DRendererImpl(FImpl).SetSkeleton(Model, Poses, MorphWeights,
+    SelectedTarget, HoverTarget);
 end;
 
 function TMmdD3DRenderer.HitTestTarget(X, Y: Integer): TMmdPreviewTarget;

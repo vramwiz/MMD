@@ -6,6 +6,8 @@ uses
   System.IOUtils,
   System.Math,
   System.SysUtils,
+  Vcl.ComCtrls,
+  Vcl.Forms,
   PmxModel in 'Source\Lib\MMD\Core\PmxModel.pas',
   PmxPoseTypes in 'Source\Lib\MMD\Core\PmxPoseTypes.pas',
   PmxPoseMath in 'Source\Lib\MMD\Core\PmxPoseMath.pas',
@@ -17,13 +19,48 @@ uses
   PmxGeometryReader in 'Source\Lib\MMD\IO\PmxGeometryReader.pas',
   PmxMaterialReader in 'Source\Lib\MMD\IO\PmxMaterialReader.pas',
   PmxBoneReader in 'Source\Lib\MMD\IO\PmxBoneReader.pas',
-  PmxMorphReader in 'Source\Lib\MMD\IO\PmxMorphReader.pas';
+  PmxMorphReader in 'Source\Lib\MMD\IO\PmxMorphReader.pas',
+  MmdD3DDeform in 'Source\Lib\MMD\Editor\D3D\MmdD3DDeform.pas',
+  MmdMorphPreviewPanel in 'Source\Lib\MMD\Editor\MmdMorphPreviewPanel.pas';
 
 procedure CheckNear(Actual, Expected: Single; const Name: string);
 begin
   if Abs(Actual - Expected) > 0.0001 then
     raise Exception.CreateFmt('%s: expected %.6f, got %.6f',
       [Name, Expected, Actual]);
+end;
+
+procedure TestMorphPanelCreation;
+var
+  Form: TForm;
+  I: Integer;
+  Model: TPmxModel;
+  Panel: TMmdMorphPreviewPanel;
+  Track: TTrackBar;
+  Weights: TPmxMorphWeights;
+begin
+  Form := TForm.Create(nil);
+  Model := TPmxModel.Create;
+  try
+    SetLength(Model.Morphs, 1);
+    Model.Morphs[0].Name := 'test';
+    Model.Morphs[0].MorphType := pmtVertex;
+    Panel := TMmdMorphPreviewPanel.Create(Form);
+    Panel.Parent := Form;
+    Panel.SetModel(Model);
+    Track := nil;
+    for I := 0 to Panel.ComponentCount - 1 do
+      if Panel.Components[I] is TTrackBar then
+        Track := TTrackBar(Panel.Components[I]);
+    if Track = nil then
+      raise Exception.Create('morph preview track bar was not found');
+    Track.Position := 100;
+    Panel.CopyWeights(Weights);
+    CheckNear(Weights[0], 1.0, 'morph preview track weight');
+  finally
+    Model.Free;
+    Form.Free;
+  end;
 end;
 
 procedure TestGroupedVertexAndBoneMorph;
@@ -70,6 +107,12 @@ begin
     CheckNear(Skinned[0].Position.X, 0.4 * Cos(Pi / 10), 'morphed skin x');
     CheckNear(Skinned[0].Position.Y, 0.6 + 0.4 * Sin(Pi / 10),
       'morphed skin y');
+    InitializeBonePoses(Model, Poses);
+    DeformPreviewModel(Model, Poses, Weights, Transforms, Skinned);
+    CheckNear(Skinned[0].Position.X, 0.4 * Cos(Pi / 10),
+      'preview morphed skin x');
+    CheckNear(Skinned[0].Position.Y, 0.6 + 0.4 * Sin(Pi / 10),
+      'preview morphed skin y');
   finally
     Model.Free;
   end;
@@ -78,21 +121,75 @@ end;
 procedure TestRealModel;
 var
   FileNames: TArray<string>;
+  BaseSkinned, MorphedSkinned: TPmxSkinnedVertices;
+  BaseTransforms, MorphedTransforms: TPmxBoneTransforms;
+  BonePoses: TPmxBonePoses;
+  Delta, MaxDelta: Double;
+  I, MovedCount: Integer;
   Model: TPmxModel;
+  Weights: TPmxMorphWeights;
 begin
-  FileNames := TDirectory.GetFiles(TPath.Combine(GetCurrentDir, 'Model'),
-    '*.pmx', TSearchOption.soAllDirectories);
+  if ParamCount > 0 then
+  begin
+    SetLength(FileNames, 1);
+    FileNames[0] := ParamStr(1);
+  end
+  else if not TDirectory.Exists(TPath.Combine(GetCurrentDir, 'Model')) then
+  begin
+    Writeln('Real model: SKIP (Model directory was not found)');
+    Exit;
+  end;
   if Length(FileNames) = 0 then
-    raise Exception.Create('real PMX test model was not found');
+    FileNames := TDirectory.GetFiles(TPath.Combine(GetCurrentDir, 'Model'),
+      '*.pmx', TSearchOption.soAllDirectories);
+  if Length(FileNames) = 0 then
+  begin
+    Writeln('Real model: SKIP (Model directory has no PMX)');
+    Exit;
+  end;
   Model := GetCachedPmxModel(FileNames[0]);
   if Length(Model.Morphs) = 0 then
     raise Exception.Create('real PMX has no morphs');
   Writeln(Format('Real model: morphs=%d', [Length(Model.Morphs)]));
+  InitializeBonePoses(Model, BonePoses);
+  InitializeMorphWeights(Model, Weights);
+  DeformPreviewModel(Model, BonePoses, Weights, BaseTransforms, BaseSkinned);
+  MovedCount := 0;
+  for I := 0 to High(Model.Morphs) do
+    if IsPreviewMorphSupported(Model.Morphs[I].MorphType) then
+    begin
+      InitializeMorphWeights(Model, Weights);
+      Weights[I] := 1.0;
+      DeformPreviewModel(Model, BonePoses, Weights, MorphedTransforms,
+        MorphedSkinned);
+      MaxDelta := 0;
+      for var VertexIndex := 0 to High(BaseSkinned) do
+      begin
+        Delta := Sqr(MorphedSkinned[VertexIndex].Position.X -
+          BaseSkinned[VertexIndex].Position.X) +
+          Sqr(MorphedSkinned[VertexIndex].Position.Y -
+          BaseSkinned[VertexIndex].Position.Y) +
+          Sqr(MorphedSkinned[VertexIndex].Position.Z -
+          BaseSkinned[VertexIndex].Position.Z);
+        MaxDelta := Max(MaxDelta, Sqrt(Delta));
+      end;
+      if MaxDelta > 0.000001 then
+        Inc(MovedCount);
+      Writeln(Format('%d'#9'%s'#9'type=%d'#9'max_delta=%.6f',
+        [I, Model.Morphs[I].Name, Ord(Model.Morphs[I].MorphType), MaxDelta]));
+    end;
+  if MovedCount = 0 then
+    raise Exception.Create('real PMX preview morphs did not move any vertex');
+  Writeln(Format('Real model preview movers=%d', [MovedCount]));
 end;
 
 begin
+  Application.Initialize;
   try
+    TestMorphPanelCreation;
+    Writeln('Morph preview panel creation: PASS');
     TestGroupedVertexAndBoneMorph;
+    Writeln('Synthetic morph and preview deformation: PASS');
     TestRealModel;
     Writeln('MmdMorphTest: PASS');
   except

@@ -15,7 +15,6 @@ uses
 
 type
   TMmdPressedViewKeys = set of Byte;
-
   TMmdD3DViewport = class(TMmdD3DViewportSurface)
   private
     FDragDirection: TPmxVector3;
@@ -79,6 +78,7 @@ uses
   Winapi.Windows,
   System.Math,
   MmdD3DInteraction,
+  MmdD3DLiveDragTest,
   MmdPoseSymmetry,
   PmxPoseMath;
 
@@ -285,7 +285,13 @@ begin
     FPoses[FDragPoseBone].Rotation := Rotation;
     if FDragMirrorBone >= 0 then
       FPoses[FDragMirrorBone] := MirrorBonePose(FPoses[FDragPoseBone]);
-    RebuildSkeleton;
+    if TEMPORARY_LIVE_MODEL_DRAG_TEST then
+    begin
+      RebuildScene;
+      Update;
+    end
+    else
+      RebuildSkeleton;
     if Assigned(FOnPoseChanged) then
       FOnPoseChanged(Self);
     Exit;

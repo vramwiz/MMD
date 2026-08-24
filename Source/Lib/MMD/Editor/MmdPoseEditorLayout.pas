@@ -9,7 +9,8 @@ uses
   Vcl.Controls,
   Vcl.Forms,
   Vcl.StdCtrls,
-  MmdD3DViewport;
+  MmdD3DViewport,
+  MmdMorphPreviewPanel;
 
 type
   TMmdPoseEditControls = array[0..5] of TEdit;
@@ -19,6 +20,7 @@ type
     FApplyButton: TButton;
     FBoneList: TListBox;
     FEdits: TMmdPoseEditControls;
+    FMorphPreview: TMmdMorphPreviewPanel;
     FRedoButton: TButton;
     FResetAllButton: TButton;
     FResetBoneButton: TButton;
@@ -41,7 +43,7 @@ const
   FIELD_NAMES: array[0..5] of string =
     ('移動 X', '移動 Y', '移動 Z', '回転 X°', '回転 Y°', '回転 Z°');
 var
-  ButtonPanel, EditorPanel: TPanel;
+  ButtonPanel, EditorPanel, LeftPanel: TPanel;
   CancelButton, OkButton: TButton;
   Label_: TLabel;
   Row: Integer;
@@ -56,10 +58,19 @@ begin
   BorderStyle := bsSizeable;
   KeyPreview := True;
 
+  LeftPanel := TPanel.Create(Self);
+  LeftPanel.Parent := Self;
+  LeftPanel.Align := alLeft;
+  LeftPanel.Width := 245;
+  LeftPanel.BevelOuter := bvNone;
+
+  FMorphPreview := TMmdMorphPreviewPanel.Create(Self);
+  FMorphPreview.Parent := LeftPanel;
+  FMorphPreview.Align := alBottom;
+
   FBoneList := TListBox.Create(Self);
-  FBoneList.Parent := Self;
-  FBoneList.Align := alLeft;
-  FBoneList.Width := 245;
+  FBoneList.Parent := LeftPanel;
+  FBoneList.Align := alClient;
 
   EditorPanel := TPanel.Create(Self);
   EditorPanel.Parent := Self;

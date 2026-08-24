@@ -1,6 +1,6 @@
-﻿unit MmdD3DScene;
+unit MmdD3DScene;
 
-// PMX姿勢からD3Dプレビュー用の三角形・骨格頂点を生成する。
+// PMX姿勢から、カメラに依存しないD3Dプレビュー頂点と投影範囲を生成する。
 
 interface
 
@@ -14,26 +14,80 @@ type
     R, G, B, A: Single;
   end;
   TMmdPreviewVertices = array of TMmdPreviewVertex;
+  TMmdPreviewProjection = record
+    ModelWidth: Single;
+    ModelHeight: Single;
+    Radius: Single;
+  end;
   TMmdPreviewScene = record
     Triangles: TMmdPreviewVertices;
     BoneLines: TMmdPreviewVertices;
+    Projection: TMmdPreviewProjection;
+  end;
+  TMmdPreviewCamera = record
+    Yaw: Single;
+    Pitch: Single;
+    Zoom: Single;
   end;
 
-// CPUスキニングを行い、正規化デバイス座標のプレビュー頂点を構築する。
+// CPUスキニングを行い、モデル中心を原点とするプレビュー頂点を構築する。
 procedure BuildPreviewScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-  SelectedBone, ViewWidth, ViewHeight: Integer; out Scene: TMmdPreviewScene);
+  SelectedBone: Integer; out Scene: TMmdPreviewScene);
+// 正面表示、等倍の初期カメラ値を返す。
+function DefaultPreviewCamera: TMmdPreviewCamera;
+// GPUシェーダーと同じ計算で、テスト用にモデル座標をNDCへ投影する。
+function ProjectPreviewPosition(const Position: TPmxVector3;
+  const Projection: TMmdPreviewProjection; const Camera: TMmdPreviewCamera;
+  ViewWidth, ViewHeight: Integer): TPmxVector3;
 
 implementation
 
 uses
   System.Math;
 
-procedure SetVertex(var Vertex: TMmdPreviewVertex; const Position: TPmxVector3;
-  CenterX, CenterY, MinZ, ScaleX, ScaleY, ScaleZ, R, G, B, A: Single);
+function DefaultPreviewCamera: TMmdPreviewCamera;
 begin
-  Vertex.X := (Position.X - CenterX) * ScaleX;
-  Vertex.Y := (Position.Y - CenterY) * ScaleY;
-  Vertex.Z := (Position.Z - MinZ) * ScaleZ;
+  Result := Default(TMmdPreviewCamera);
+  Result.Zoom := 1.0;
+end;
+
+function RotatePosition(const Position: TPmxVector3;
+  const Camera: TMmdPreviewCamera): TPmxVector3;
+var
+  CosPitch, CosYaw, SinPitch, SinYaw: Single;
+  Z: Single;
+begin
+  SinCos(Camera.Yaw, SinYaw, CosYaw);
+  SinCos(Camera.Pitch, SinPitch, CosPitch);
+  Result.X := Position.X * CosYaw + Position.Z * SinYaw;
+  Z := -Position.X * SinYaw + Position.Z * CosYaw;
+  Result.Y := Position.Y * CosPitch - Z * SinPitch;
+  Result.Z := Position.Y * SinPitch + Z * CosPitch;
+end;
+
+function ProjectPreviewPosition(const Position: TPmxVector3;
+  const Projection: TMmdPreviewProjection; const Camera: TMmdPreviewCamera;
+  ViewWidth, ViewHeight: Integer): TPmxVector3;
+var
+  PixelScale: Single;
+  Rotated: TPmxVector3;
+begin
+  ViewWidth := Max(ViewWidth, 1);
+  ViewHeight := Max(ViewHeight, 1);
+  Rotated := RotatePosition(Position, Camera);
+  PixelScale := 0.9 * EnsureRange(Camera.Zoom, 0.2, 5.0) *
+    Min(ViewWidth / Projection.ModelWidth, ViewHeight / Projection.ModelHeight);
+  Result.X := Rotated.X * 2.0 * PixelScale / ViewWidth;
+  Result.Y := Rotated.Y * 2.0 * PixelScale / ViewHeight;
+  Result.Z := 0.5 + Rotated.Z * 0.45 / Projection.Radius;
+end;
+
+procedure SetVertex(var Vertex: TMmdPreviewVertex; const Position,
+  Center: TPmxVector3; R, G, B, A: Single);
+begin
+  Vertex.X := Position.X - Center.X;
+  Vertex.Y := Position.Y - Center.Y;
+  Vertex.Z := Position.Z - Center.Z;
   Vertex.R := R;
   Vertex.G := G;
   Vertex.B := B;
@@ -61,8 +115,7 @@ begin
 end;
 
 procedure BuildTriangles(const Model: TPmxModel;
-  const Skinned: TPmxSkinnedVertices; const BoundsMin, BoundsMax: TPmxVector3;
-  CenterX, CenterY, ScaleX, ScaleY, ScaleZ: Single;
+  const Skinned: TPmxSkinnedVertices; const Center: TPmxVector3;
   out Vertices: TMmdPreviewVertices);
 var
   IndexOffset: Integer;
@@ -88,8 +141,7 @@ begin
       Normal := Skinned[SourceIndex].Normal;
       Shade := EnsureRange(0.35 + 0.65 * Abs(
         Normal.X * 0.25 + Normal.Y * 0.55 - Normal.Z * 0.8), 0.2, 1.0);
-      SetVertex(Vertices[VertexIndex], Position, CenterX, CenterY, BoundsMin.Z,
-        ScaleX, ScaleY, ScaleZ,
+      SetVertex(Vertices[VertexIndex], Position, Center,
         EnsureRange(Material.Diffuse.X * Shade, 0.0, 1.0),
         EnsureRange(Material.Diffuse.Y * Shade, 0.0, 1.0),
         EnsureRange(Material.Diffuse.Z * Shade, 0.0, 1.0), 1.0);
@@ -100,9 +152,8 @@ begin
 end;
 
 procedure BuildBoneLines(const Model: TPmxModel;
-  const Transforms: TPmxBoneTransforms; const BoundsMin: TPmxVector3;
-  CenterX, CenterY, ScaleX, ScaleY, ScaleZ: Single; SelectedBone: Integer;
-  out Vertices: TMmdPreviewVertices);
+  const Transforms: TPmxBoneTransforms; const Center: TPmxVector3;
+  SelectedBone: Integer; out Vertices: TMmdPreviewVertices);
 var
   B, G, R: Single;
   BoneIndex: Integer;
@@ -129,22 +180,21 @@ begin
       B := 1.0;
     end;
     SetVertex(Vertices[VertexIndex], Transforms[ParentIndex].Position,
-      CenterX, CenterY, BoundsMin.Z, ScaleX, ScaleY, ScaleZ, R, G, B, 1.0);
+      Center, R, G, B, 1.0);
     Inc(VertexIndex);
     SetVertex(Vertices[VertexIndex], Transforms[BoneIndex].Position,
-      CenterX, CenterY, BoundsMin.Z, ScaleX, ScaleY, ScaleZ, R, G, B, 1.0);
+      Center, R, G, B, 1.0);
     Inc(VertexIndex);
   end;
   SetLength(Vertices, VertexIndex);
 end;
 
 procedure BuildPreviewScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-  SelectedBone, ViewWidth, ViewHeight: Integer; out Scene: TMmdPreviewScene);
+  SelectedBone: Integer; out Scene: TMmdPreviewScene);
 var
   BoundsMax, BoundsMin: TPmxVector3;
-  CenterX, CenterY: Single;
-  ModelHeight, ModelWidth: Single;
-  PixelScale, ScaleX, ScaleY, ScaleZ: Single;
+  Center: TPmxVector3;
+  Depth: Single;
   Skinned: TPmxSkinnedVertices;
   Transforms: TPmxBoneTransforms;
 begin
@@ -154,21 +204,17 @@ begin
   CalculateBoneTransforms(Model, Poses, Transforms);
   SkinVerticesLinear(Model, Transforms, Skinned);
   CalculateBounds(Skinned, BoundsMin, BoundsMax);
-  CenterX := (BoundsMin.X + BoundsMax.X) * 0.5;
-  CenterY := (BoundsMin.Y + BoundsMax.Y) * 0.5;
-  ModelWidth := Max(BoundsMax.X - BoundsMin.X, 0.001);
-  ModelHeight := Max(BoundsMax.Y - BoundsMin.Y, 0.001);
-  ViewWidth := Max(ViewWidth, 1);
-  ViewHeight := Max(ViewHeight, 1);
-  // NDCではなく実ピクセル上の縮尺を共通化し、縦長・横長でも体形を維持する。
-  PixelScale := 0.9 * Min(ViewWidth / ModelWidth, ViewHeight / ModelHeight);
-  ScaleX := 2.0 * PixelScale / ViewWidth;
-  ScaleY := 2.0 * PixelScale / ViewHeight;
-  ScaleZ := 0.9 / Max(BoundsMax.Z - BoundsMin.Z, 0.001);
-  BuildTriangles(Model, Skinned, BoundsMin, BoundsMax, CenterX, CenterY,
-    ScaleX, ScaleY, ScaleZ, Scene.Triangles);
-  BuildBoneLines(Model, Transforms, BoundsMin, CenterX, CenterY, ScaleX,
-    ScaleY, ScaleZ, SelectedBone, Scene.BoneLines);
+  Center.X := (BoundsMin.X + BoundsMax.X) * 0.5;
+  Center.Y := (BoundsMin.Y + BoundsMax.Y) * 0.5;
+  Center.Z := (BoundsMin.Z + BoundsMax.Z) * 0.5;
+  Scene.Projection.ModelWidth := Max(BoundsMax.X - BoundsMin.X, 0.001);
+  Scene.Projection.ModelHeight := Max(BoundsMax.Y - BoundsMin.Y, 0.001);
+  Depth := Max(BoundsMax.Z - BoundsMin.Z, 0.001);
+  Scene.Projection.Radius := Max(0.5 * Sqrt(
+    Sqr(Scene.Projection.ModelWidth) + Sqr(Scene.Projection.ModelHeight) +
+    Sqr(Depth)), 0.001);
+  BuildTriangles(Model, Skinned, Center, Scene.Triangles);
+  BuildBoneLines(Model, Transforms, Center, SelectedBone, Scene.BoneLines);
 end;
 
 end.

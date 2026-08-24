@@ -22,6 +22,7 @@ uses
   MMD_Model_Renderer in 'Source\Plugin\Model\Render\MMD_Model_Renderer.pas',
   MMD_Model_StandardPoseButton in 'Source\Plugin\Model\Editor\MMD_Model_StandardPoseButton.pas',
   MmdD3DScene in 'Source\Lib\MMD\Editor\D3D\MmdD3DScene.pas',
+  MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
   MmdD3DRenderer in 'Source\Lib\MMD\Editor\D3D\MmdD3DRenderer.pas',
   MmdD3DViewport in 'Source\Lib\MMD\Editor\D3D\MmdD3DViewport.pas',
   MmdPoseEditor in 'Source\Lib\MMD\Editor\MmdPoseEditor.pas';

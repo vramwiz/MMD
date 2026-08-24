@@ -1,13 +1,14 @@
 ﻿unit MmdD3DRenderer;
 
-// D3D11デバイス、SwapChain、シェーダーとGPUバッファの寿命・描画を管理する。
+// D3D11デバイス、SwapChain、描画先とGPU頂点バッファの寿命を管理する。
 
 interface
 
 uses
   Winapi.Windows,
   PmxModel,
-  PmxPose;
+  PmxPose,
+  MmdD3DScene;
 
 type
   TMmdD3DRenderer = class
@@ -23,8 +24,9 @@ type
     // SwapChainと深度バッファを指定サイズへ作り直す。0以下のサイズは無視する。
     procedure Resize(Width, Height: Integer);
     // 姿勢からCPU頂点を再生成し、このRendererだけが所有するGPUバッファへ置き換える。
-    procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-      SelectedBone: Integer);
+    procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses; SelectedBone: Integer);
+    // 頂点バッファを変更せず、シェーダーへ渡すカメラ定数だけを更新する。
+    procedure SetCamera(const Camera: TMmdPreviewCamera);
     property ErrorText: string read GetErrorText;
   end;
 
@@ -33,37 +35,35 @@ implementation
 uses
   Winapi.D3D11,
   Winapi.D3DCommon,
-  Winapi.D3DCompiler,
   Winapi.DXGI,
   Winapi.DxgiFormat,
   Winapi.DxgiType,
   System.Math,
   System.SysUtils,
-  MmdD3DScene;
+  MmdD3DShaders;
 
 type
   TMmdD3DRendererImpl = class
   private
     FContext: ID3D11DeviceContext;
+    FCamera: TMmdPreviewCamera;
     FDepthTexture: ID3D11Texture2D;
     FDepthView: ID3D11DepthStencilView;
     FDevice: ID3D11Device;
     FErrorText: string;
-    FInputLayout: ID3D11InputLayout;
     FLineBuffer: ID3D11Buffer;
     FLineCount: Cardinal;
-    FPixelShader: ID3D11PixelShader;
+    FProjection: TMmdPreviewProjection;
     FRasterizerState: ID3D11RasterizerState;
     FRenderTarget: ID3D11RenderTargetView;
+    FShaders: TMmdD3DShaders;
     FSwapChain: IDXGISwapChain;
     FTriangleBuffer: ID3D11Buffer;
     FTriangleCount: Cardinal;
-    FVertexShader: ID3D11VertexShader;
     FViewHeight: Integer;
     FViewWidth: Integer;
     procedure CreateDevice(Window: HWND);
     procedure CreateRenderTargets;
-    procedure CreateShaders;
     function CreateVertexBuffer(const Vertices: TMmdPreviewVertices): ID3D11Buffer;
     procedure ReleaseRenderTargets;
   public
@@ -71,17 +71,10 @@ type
     destructor Destroy; override;
     procedure Render;
     procedure Resize(Width, Height: Integer);
-    procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses;
-      SelectedBone: Integer);
+    procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses; SelectedBone: Integer);
+    procedure SetCamera(const Camera: TMmdPreviewCamera);
     property ErrorText: string read FErrorText;
   end;
-
-const
-  SHADER_SOURCE: AnsiString =
-    'struct I{float3 p:POSITION;float4 c:COLOR;};' +
-    'struct O{float4 p:SV_POSITION;float4 c:COLOR;};' +
-    'O VSMain(I v){O o;o.p=float4(v.p,1);o.c=v.c;return o;}' +
-    'float4 PSMain(O i):SV_TARGET{return i.c;}';
 
 procedure CheckHR(Value: HRESULT; const Operation: string);
 begin
@@ -92,11 +85,12 @@ end;
 constructor TMmdD3DRendererImpl.Create(Window: HWND; Width, Height: Integer);
 begin
   inherited Create;
+  FCamera := DefaultPreviewCamera;
   FViewWidth := Max(Width, 1);
   FViewHeight := Max(Height, 1);
   try
     CreateDevice(Window);
-    CreateShaders;
+    FShaders := TMmdD3DShaders.Create(FDevice);
     CreateRenderTargets;
   except
     on E: Exception do
@@ -111,10 +105,8 @@ begin
   ReleaseRenderTargets;
   FLineBuffer := nil;
   FTriangleBuffer := nil;
+  FShaders.Free;
   FRasterizerState := nil;
-  FInputLayout := nil;
-  FPixelShader := nil;
-  FVertexShader := nil;
   FSwapChain := nil;
   FContext := nil;
   FDevice := nil;
@@ -146,36 +138,6 @@ begin
   RasterDesc.DepthClipEnable := True;
   CheckHR(FDevice.CreateRasterizerState(RasterDesc, FRasterizerState),
     'CreateRasterizerState');
-end;
-
-procedure TMmdD3DRendererImpl.CreateShaders;
-var
-  Errors: ID3DBlob;
-  InputElements: array[0..1] of TD3D11_INPUT_ELEMENT_DESC;
-  PixelCode: ID3DBlob;
-  VertexCode: ID3DBlob;
-begin
-  CheckHR(D3DCompile(PAnsiChar(SHADER_SOURCE), Length(SHADER_SOURCE), nil, nil,
-    nil, 'VSMain', 'vs_4_0', D3DCOMPILE_ENABLE_STRICTNESS, 0, VertexCode,
-    Errors), 'Compile vertex shader');
-  CheckHR(FDevice.CreateVertexShader(VertexCode.GetBufferPointer,
-    VertexCode.GetBufferSize, nil, @FVertexShader), 'CreateVertexShader');
-  FillChar(InputElements, SizeOf(InputElements), 0);
-  InputElements[0].SemanticName := 'POSITION';
-  InputElements[0].Format := DXGI_FORMAT_R32G32B32_FLOAT;
-  InputElements[0].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
-  InputElements[1].SemanticName := 'COLOR';
-  InputElements[1].Format := DXGI_FORMAT_R32G32B32A32_FLOAT;
-  InputElements[1].AlignedByteOffset := 12;
-  InputElements[1].InputSlotClass := D3D11_INPUT_PER_VERTEX_DATA;
-  CheckHR(FDevice.CreateInputLayout(@InputElements[0], Length(InputElements),
-    VertexCode.GetBufferPointer, VertexCode.GetBufferSize, FInputLayout),
-    'CreateInputLayout');
-  CheckHR(D3DCompile(PAnsiChar(SHADER_SOURCE), Length(SHADER_SOURCE), nil, nil,
-    nil, 'PSMain', 'ps_4_0', D3DCOMPILE_ENABLE_STRICTNESS, 0, PixelCode,
-    Errors), 'Compile pixel shader');
-  CheckHR(FDevice.CreatePixelShader(PixelCode.GetBufferPointer,
-    PixelCode.GetBufferSize, nil, FPixelShader), 'CreatePixelShader');
 end;
 
 procedure TMmdD3DRendererImpl.CreateRenderTargets;
@@ -228,6 +190,9 @@ begin
     CheckHR(FSwapChain.ResizeBuffers(0, Width, Height, DXGI_FORMAT_UNKNOWN, 0),
       'ResizeBuffers');
     CreateRenderTargets;
+    if FShaders <> nil then
+      FShaders.UpdateCamera(FContext, FCamera, FProjection, FViewWidth,
+        FViewHeight);
     FErrorText := '';
   except
     on E: Exception do
@@ -262,17 +227,27 @@ begin
   if FDevice = nil then
     Exit;
   try
-    BuildPreviewScene(Model, Poses, SelectedBone, FViewWidth, FViewHeight,
-      Scene);
+    BuildPreviewScene(Model, Poses, SelectedBone, Scene);
     FTriangleBuffer := CreateVertexBuffer(Scene.Triangles);
     FTriangleCount := Length(Scene.Triangles);
     FLineBuffer := CreateVertexBuffer(Scene.BoneLines);
     FLineCount := Length(Scene.BoneLines);
+    FProjection := Scene.Projection;
+    FShaders.UpdateCamera(FContext, FCamera, FProjection, FViewWidth,
+      FViewHeight);
     FErrorText := '';
   except
     on E: Exception do
       FErrorText := E.Message;
   end;
+end;
+
+procedure TMmdD3DRendererImpl.SetCamera(const Camera: TMmdPreviewCamera);
+begin
+  FCamera := Camera;
+  if FShaders <> nil then
+    FShaders.UpdateCamera(FContext, FCamera, FProjection, FViewWidth,
+      FViewHeight);
 end;
 
 procedure TMmdD3DRendererImpl.Render;
@@ -294,9 +269,7 @@ begin
   Viewport := TD3D11_VIEWPORT.Create(FDepthTexture, FRenderTarget);
   FContext.RSSetViewports(1, @Viewport);
   FContext.RSSetState(FRasterizerState);
-  FContext.IASetInputLayout(FInputLayout);
-  FContext.VSSetShader(FVertexShader, ID3D11ClassInstance(nil), 0);
-  FContext.PSSetShader(FPixelShader, ID3D11ClassInstance(nil), 0);
+  FShaders.Bind(FContext);
   Stride := SizeOf(TMmdPreviewVertex);
   Offset := 0;
   if (FTriangleBuffer <> nil) and (FTriangleCount > 0) then
@@ -347,6 +320,11 @@ procedure TMmdD3DRenderer.SetScene(Model: TPmxModel;
   const Poses: TPmxBonePoses; SelectedBone: Integer);
 begin
   TMmdD3DRendererImpl(FImpl).SetScene(Model, Poses, SelectedBone);
+end;
+
+procedure TMmdD3DRenderer.SetCamera(const Camera: TMmdPreviewCamera);
+begin
+  TMmdD3DRendererImpl(FImpl).SetCamera(Camera);
 end;
 
 end.

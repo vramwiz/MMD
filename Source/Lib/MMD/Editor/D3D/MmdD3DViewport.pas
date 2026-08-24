@@ -6,25 +6,35 @@ interface
 
 uses
   System.Classes,
+  System.Types,
   Vcl.Controls,
   PmxModel,
   PmxPose,
+  MmdD3DScene,
   MmdD3DRenderer;
 
 type
   TMmdD3DViewport = class(TCustomControl)
   private
     FModel: TPmxModel;
+    FCamera: TMmdPreviewCamera;
+    FDragging: Boolean;
+    FLastMouse: TPoint;
     FPoses: TPmxBonePoses;
     FRenderer: TMmdD3DRenderer;
     FSelectedBone: Integer;
     function GetErrorText: string;
     procedure RebuildScene;
+    procedure UpdateCamera;
   protected
     procedure CreateWnd; override;
     procedure DestroyWnd; override;
     procedure Paint; override;
     procedure Resize; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
   public
     // VCLウィンドウHandleの生成・破棄にD3D Rendererの寿命を追従させるControlを生成する。
     constructor Create(AOwner: TComponent); override;
@@ -39,14 +49,19 @@ implementation
 
 uses
   Winapi.Windows,
+  System.Math,
   System.SysUtils,
   Vcl.Graphics;
 
 constructor TMmdD3DViewport.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FCamera := DefaultPreviewCamera;
   FSelectedBone := -1;
   Color := RGB(14, 15, 19);
+  Cursor := crSizeAll;
+  Hint := '左ドラッグ: カメラ回転  /  マウスホイール: 拡大縮小';
+  ShowHint := True;
   ControlStyle := ControlStyle + [csOpaque];
 end;
 
@@ -74,11 +89,8 @@ procedure TMmdD3DViewport.Resize;
 begin
   inherited Resize;
   if FRenderer <> nil then
-  begin
     FRenderer.Resize(ClientWidth, ClientHeight);
-    // Resize後の縦横比でNDC座標を作り直す。
-    RebuildScene;
-  end;
+  Invalidate;
 end;
 
 procedure TMmdD3DViewport.Paint;
@@ -104,8 +116,63 @@ end;
 procedure TMmdD3DViewport.RebuildScene;
 begin
   if (FRenderer <> nil) and (FModel <> nil) then
+  begin
     FRenderer.SetScene(FModel, FPoses, FSelectedBone);
+    FRenderer.SetCamera(FCamera);
+  end;
   Invalidate;
+end;
+
+procedure TMmdD3DViewport.UpdateCamera;
+begin
+  if FRenderer <> nil then
+    // ドラッグ中は定数バッファだけを更新し、スキニング済み頂点を再利用する。
+    FRenderer.SetCamera(FCamera);
+  Invalidate;
+end;
+
+procedure TMmdD3DViewport.MouseDown(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+begin
+  inherited MouseDown(Button, Shift, X, Y);
+  if Button <> mbLeft then
+    Exit;
+  FDragging := True;
+  FLastMouse := Point(X, Y);
+  MouseCapture := True;
+end;
+
+procedure TMmdD3DViewport.MouseMove(Shift: TShiftState; X, Y: Integer);
+const
+  ROTATION_PER_PIXEL = 0.01;
+begin
+  inherited MouseMove(Shift, X, Y);
+  if not FDragging then
+    Exit;
+  FCamera.Yaw := FCamera.Yaw + (X - FLastMouse.X) * ROTATION_PER_PIXEL;
+  FCamera.Pitch := EnsureRange(FCamera.Pitch +
+    (Y - FLastMouse.Y) * ROTATION_PER_PIXEL, -Pi * 0.47, Pi * 0.47);
+  FLastMouse := Point(X, Y);
+  UpdateCamera;
+end;
+
+procedure TMmdD3DViewport.MouseUp(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+begin
+  inherited MouseUp(Button, Shift, X, Y);
+  if Button <> mbLeft then
+    Exit;
+  FDragging := False;
+  MouseCapture := False;
+end;
+
+function TMmdD3DViewport.DoMouseWheel(Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint): Boolean;
+begin
+  FCamera.Zoom := EnsureRange(FCamera.Zoom * Power(1.1,
+    WheelDelta / WHEEL_DELTA), 0.2, 5.0);
+  UpdateCamera;
+  Result := True;
 end;
 
 procedure TMmdD3DViewport.SetScene(AModel: TPmxModel;

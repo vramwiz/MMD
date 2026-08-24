@@ -20,22 +20,33 @@
 - Releaseは `.auf2` を作った後、同じ出力先の `.dll` と `.rsm` を削除する。
 - ビルド成果物とIDEローカル設定はGitへ登録しない。
 
+## ソース構成とユニット規模
+
+- `Source\Lib\MMD`直下へユニットを集積せず、`Core`、`IO`、`IPC`、`Editor`等の用途別フォルダへ配置する。
+- Editor固有の描画実装は`Editor\D3D`のように技術境界でも分け、VCL接続、GPU資源管理、シーン頂点生成を同じユニットへ混在させない。
+- Plugin固有コードも`Context`、`Input`、`Render`、`Editor`へ分け、Filter登録・フレーム統括ユニットに詳細実装を置かない。
+- 1ユニットは原則400行未満を目安とする。超える前に、ファイル名ではなく変更理由とデータの流れが同じ責務で分割する。
+- 新しい機能を追加する際は、既存の大きなユニットへ追記する前に独立した責務として分離できないか確認する。
+
 Debug Win64:
 
 ```powershell
 cmd /c "call ""C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat"" && msbuild ""D:\DelphiProg\MMD\MMD_Model_Filter.dproj"" /t:Build /p:Config=Debug /p:Platform=Win64"
+cmd /c "call ""C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat"" && msbuild ""D:\DelphiProg\MMD\MMD_Pose_Filter.dproj"" /t:Build /p:Config=Debug /p:Platform=Win64"
 ```
 
 Release Win64:
 
 ```powershell
 cmd /c "call ""C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat"" && msbuild ""D:\DelphiProg\MMD\MMD_Model_Filter.dproj"" /t:Build /p:Config=Release /p:Platform=Win64"
+cmd /c "call ""C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat"" && msbuild ""D:\DelphiProg\MMD\MMD_Pose_Filter.dproj"" /t:Build /p:Config=Release /p:Platform=Win64"
 ```
 
 配備先:
 
 ```text
 C:\ProgramData\aviutl2\Plugin\MMD\MMD_Model_Filter.auf2
+C:\ProgramData\aviutl2\Plugin\MMD\MMD_Pose_Filter.auf2
 ```
 
 ## コメントルール

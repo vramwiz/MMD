@@ -8,8 +8,12 @@ interface
 uses
   AviUtl2FilterTypes;
 
+// 登録中のテーブルを初期化する。既存の設定項目は破棄される。
 procedure SetupPluginTable(Flag: Integer; Name, Label_, Information: PWideChar;
   VideoProc: TFuncProcVideo; AudioProc: TFuncProcAudio);
+// AviUtl2オブジェクトの生成・破棄通知を現在のテーブルへ設定する。
+procedure SetFilterLifecycle(CreateProc: TFuncCreate; DestroyProc: TFuncDestroy);
+// 以下のAdd系手続きは呼出順に項目を登録し、AviUtl2へ渡すnil終端配列を更新する。
 procedure AddFile(var Item: TFILTER_ITEM_FILE; Name, Value, FileFilter: PWideChar);
 procedure AddButton(var Item: TFILTER_ITEM_BUTTON; Name: PWideChar;
   Callback: TFilterItemButtonCallback);
@@ -30,6 +34,7 @@ procedure AddFilterItem(var Item: TFILTER_ITEM_GROUP); overload;
 procedure AddFilterItem(var Item: TFILTER_ITEM_SELECT); overload;
 procedure AddFilterItem(var Item: TFILTER_ITEM_COLOR); overload;
 
+// 構築済みテーブルの静的領域を返す。DLLが有効な間だけ参照できる。
 function GetPluginTable: PFILTER_PLUGIN_TABLE;
 
 implementation
@@ -71,6 +76,12 @@ begin
   GTable.Func_Proc_Audio := AudioProc;
   GTable.Func_Create := nil;
   GTable.Func_Destroy := nil;
+end;
+
+procedure SetFilterLifecycle(CreateProc: TFuncCreate; DestroyProc: TFuncDestroy);
+begin
+  GTable.Func_Create := CreateProc;
+  GTable.Func_Destroy := DestroyProc;
 end;
 
 procedure AddFile(var Item: TFILTER_ITEM_FILE; Name, Value, FileFilter: PWideChar);

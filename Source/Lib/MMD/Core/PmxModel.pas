@@ -1,5 +1,7 @@
 unit PmxModel;
 
+// PMXの描画・姿勢計算で共有する、依存を持たないコアデータ型。
+
 interface
 
 type
@@ -15,10 +17,27 @@ type
     X, Y, Z, W: Single;
   end;
 
+  TPmxVertexDeformType = (
+    pdtBdef1,
+    pdtBdef2,
+    pdtBdef4,
+    pdtSdef,
+    pdtQdef
+  );
+
+  TPmxBoneIndices = array[0..3] of Integer;
+  TPmxBoneWeights = array[0..3] of Single;
+
   TPmxVertex = record
     Position: TPmxVector3;
     Normal: TPmxVector3;
     UV: TPmxVector2;
+    DeformType: TPmxVertexDeformType;
+    BoneIndices: TPmxBoneIndices;
+    BoneWeights: TPmxBoneWeights;
+    SdefC: TPmxVector3;
+    SdefR0: TPmxVector3;
+    SdefR1: TPmxVector3;
   end;
 
   TPmxMaterial = record

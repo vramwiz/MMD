@@ -20,7 +20,8 @@ uses
 
 var
   BoneOffsetXItem: TFILTER_ITEM_TRACK;
-  BonePreviewItem: TFILTER_ITEM_CHECK;
+  DisplayModeItem: TFILTER_ITEM_SELECT;
+  DisplayModeItems: array[0..3] of TFILTER_ITEM_SELECT_ITEM;
   ModelFileItem: TFILTER_ITEM_FILE;
   ModelScaleItem: TFILTER_ITEM_TRACK;
   PluginTableInitialized: Boolean;
@@ -31,8 +32,12 @@ type
   TTextureNormalVertices = array of TVERTEX_TEXTURE_NORM;
 
 const
+  DISPLAY_MODE_MODEL = 0;
+  DISPLAY_MODE_BONES = 1;
+  DISPLAY_MODE_BOTH = 2;
   PMX_MATERIAL_DRAW_BOTH_FACES = $01;
   PMX_BONE_IK = $0020;
+  WHITE_PIXEL: TPIXEL_RGBA = (R: 255; G: 255; B: 255; A: 255);
   // draw_polyの1フレーム上限を切り分けるため、検証モデルの本体材質を優先する。
   KIRITAN_CORE_MATERIAL_ORDER: array[0..20] of Integer = (
     0, 1, 2, 3, 4, 6, 12, 14, 15, 16, 28, 29, 30, 34, 35, 36, 9, 8, 11,
@@ -85,18 +90,6 @@ begin
   Vertex.A := 1.0;
 end;
 
-procedure AddBoneQuad(var Vertices: TBoneVertices; var VertexIndex: Integer;
-  AX, AY, AZ, BX, BY, BZ, PX, PY, PZ, R, G, B: Single);
-begin
-  SetBoneVertex(Vertices[VertexIndex], AX - PX, AY - PY, AZ - PZ, R, G, B);
-  SetBoneVertex(Vertices[VertexIndex + 1], AX + PX, AY + PY, AZ + PZ, R, G, B);
-  SetBoneVertex(Vertices[VertexIndex + 2], BX + PX, BY + PY, BZ + PZ, R, G, B);
-  SetBoneVertex(Vertices[VertexIndex + 3], AX - PX, AY - PY, AZ - PZ, R, G, B);
-  SetBoneVertex(Vertices[VertexIndex + 4], BX + PX, BY + PY, BZ + PZ, R, G, B);
-  SetBoneVertex(Vertices[VertexIndex + 5], BX - PX, BY - PY, BZ - PZ, R, G, B);
-  Inc(VertexIndex, 6);
-end;
-
 procedure BuildBoneVertices(const Model: TPmxModel; InternalScale,
   OffsetX: Single; var Vertices: TBoneVertices);
 var
@@ -108,14 +101,13 @@ var
   Length_: Single;
   Parent: TPmxBone;
   PX, PY, PZ: Single;
-  QX, QY, QZ: Single;
   R, G, B: Single;
   Thickness: Single;
   VertexIndex: Integer;
 begin
-  SetLength(Vertices, Length(Model.Bones) * 12);
+  SetLength(Vertices, Length(Model.Bones) * 3);
   VertexIndex := 0;
-  Thickness := Max(0.5, InternalScale * 0.08);
+  Thickness := Max(0.75, InternalScale * 0.1);
   for BoneIndex := 0 to High(Model.Bones) do
   begin
     Bone := Model.Bones[BoneIndex];
@@ -135,7 +127,6 @@ begin
     DX := DX / Length_;
     DY := DY / Length_;
     DZ := DZ / Length_;
-
     if Abs(DZ) < 0.9 then
     begin
       PX := DY;
@@ -152,10 +143,6 @@ begin
     PX := PX / Length_ * Thickness;
     PY := PY / Length_ * Thickness;
     PZ := PZ / Length_ * Thickness;
-    QX := (DY * PZ - DZ * PY);
-    QY := (DZ * PX - DX * PZ);
-    QZ := (DX * PY - DY * PX);
-
     if (Bone.Flags and PMX_BONE_IK) <> 0 then
     begin
       R := 1.0;
@@ -168,10 +155,10 @@ begin
       G := 0.9;
       B := 1.0;
     end;
-    AddBoneQuad(Vertices, VertexIndex, AX, AY, AZ, BX, BY, BZ,
-      PX, PY, PZ, R, G, B);
-    AddBoneQuad(Vertices, VertexIndex, AX, AY, AZ, BX, BY, BZ,
-      QX, QY, QZ, R, G, B);
+    SetBoneVertex(Vertices[VertexIndex], AX - PX, AY - PY, AZ - PZ, R, G, B);
+    SetBoneVertex(Vertices[VertexIndex + 1], AX + PX, AY + PY, AZ + PZ, R, G, B);
+    SetBoneVertex(Vertices[VertexIndex + 2], BX, BY, BZ, R, G, B);
+    Inc(VertexIndex, 3);
   end;
   SetLength(Vertices, VertexIndex);
 end;
@@ -180,14 +167,16 @@ procedure DrawBones(Video: PFILTER_PROC_VIDEO; const Model: TPmxModel;
   InternalScale, OffsetX: Single);
 begin
   BuildBoneVertices(Model, InternalScale, OffsetX, BoneVertices);
-  if Length(BoneVertices) = 0 then
+  if (Length(BoneVertices) = 0) or not Assigned(Video^.SetImageData) then
     Exit;
+  // v2.1.6aは頂点カラーでもnilの画像リソースを拒否する。
+  Video^.SetImageData(@WHITE_PIXEL, 1, 1);
   if Assigned(Video^.SetCullingState) then
     Video^.SetCullingState(0);
   if Assigned(Video^.SetMaterialShine) then
     Video^.SetMaterialShine(0.0);
   Video^.DrawPoly(VERTEX_TYPE_TRIANGLE_COLOR, @BoneVertices[0],
-    Length(BoneVertices), nil);
+    Length(BoneVertices), 'object');
 end;
 
 procedure BuildTextureVertices(const Model: TPmxModel;
@@ -276,6 +265,7 @@ end;
 
 function ModelProcVideo(Video: PFILTER_PROC_VIDEO): Byte; cdecl;
 var
+  DisplayMode: Integer;
   DrawOrderIndex: Integer;
   InternalScale: Single;
   MaterialIndex: Integer;
@@ -293,18 +283,24 @@ begin
 
     Model := GetCachedPmxModel(ModelFileName);
     InternalScale := EnsureRange(ModelScaleItem.Value, 0.1, 100.0);
+    DisplayMode := EnsureRange(DisplayModeItem.Value, DISPLAY_MODE_MODEL,
+      DISPLAY_MODE_BOTH);
     if Assigned(Video^.SetSamplerMode) then
       Video^.SetSamplerMode(SAMPLER_MODE_LOOP);
-    // モデル描画後では頂点キュー上限に達するため、確認用ボーンを先に描く。
-    if BonePreviewItem.Value <> 0 then
-      DrawBones(Video, Model, InternalScale,
-        EnsureRange(BoneOffsetXItem.Value, -100.0, 100.0) * InternalScale);
-    for DrawOrderIndex := 0 to High(KIRITAN_CORE_MATERIAL_ORDER) do
+    if DisplayMode = DISPLAY_MODE_BONES then
+      DrawBones(Video, Model, InternalScale, 0.0)
+    else
     begin
-      MaterialIndex := KIRITAN_CORE_MATERIAL_ORDER[DrawOrderIndex];
-      if MaterialIndex <= High(Model.Materials) then
-        DrawMaterial(Video, Model, Model.Materials[MaterialIndex], InternalScale,
-          NeedsDoubleSided(MaterialIndex));
+      if DisplayMode = DISPLAY_MODE_BOTH then
+        DrawBones(Video, Model, InternalScale,
+          EnsureRange(BoneOffsetXItem.Value, -100.0, 100.0) * InternalScale);
+      for DrawOrderIndex := 0 to High(KIRITAN_CORE_MATERIAL_ORDER) do
+      begin
+        MaterialIndex := KIRITAN_CORE_MATERIAL_ORDER[DrawOrderIndex];
+        if MaterialIndex <= High(Model.Materials) then
+          DrawMaterial(Video, Model, Model.Materials[MaterialIndex], InternalScale,
+            NeedsDoubleSided(MaterialIndex));
+      end;
     end;
     if Assigned(Video^.SetDefaultAnchor) then
       Video^.SetDefaultAnchor(640, 640);
@@ -325,8 +321,17 @@ begin
     AddFile(ModelFileItem, 'モデルファイル', '',
       'PMXモデル (*.pmx)'#0'*.pmx'#0 +
       'すべてのファイル (*.*)'#0'*.*'#0#0);
+    DisplayModeItems[0].Name := '標準';
+    DisplayModeItems[0].Value := DISPLAY_MODE_MODEL;
+    DisplayModeItems[1].Name := 'ボーンのみ';
+    DisplayModeItems[1].Value := DISPLAY_MODE_BONES;
+    DisplayModeItems[2].Name := '両方';
+    DisplayModeItems[2].Value := DISPLAY_MODE_BOTH;
+    DisplayModeItems[3].Name := nil;
+    DisplayModeItems[3].Value := 0;
+    AddSelect(DisplayModeItem, '表示モード', DISPLAY_MODE_MODEL,
+      @DisplayModeItems[0]);
     AddTrack(ModelScaleItem, 'MMD倍率', 15.0, 0.1, 100.0, 0.1);
-    AddCheck(BonePreviewItem, 'ボーン表示', 0);
     AddTrack(BoneOffsetXItem, 'ボーンXずらし', 30.0, -100.0, 100.0, 1.0);
     PluginTableInitialized := True;
   end;

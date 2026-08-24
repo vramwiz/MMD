@@ -31,6 +31,13 @@ type
     SurfaceCount: Integer;
   end;
 
+  TPmxBone = record
+    Name: string;
+    Position: TPmxVector3;
+    ParentIndex: Integer;
+    Flags: Word;
+  end;
+
   TPmxModel = class
   public
     SourcePath: string;
@@ -40,6 +47,7 @@ type
     Textures: TArray<string>;
     TextureAvailable: TArray<Boolean>;
     Materials: TArray<TPmxMaterial>;
+    Bones: TArray<TPmxBone>;
   end;
 
 implementation

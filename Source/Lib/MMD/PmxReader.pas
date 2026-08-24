@@ -21,6 +21,15 @@ const
   MAX_INDEX_COUNT = 30000000;
   MAX_TEXTURE_COUNT = 100000;
   MAX_MATERIAL_COUNT = 100000;
+  MAX_BONE_COUNT = 1000000;
+  MAX_IK_LINK_COUNT = 1000000;
+  BONE_FLAG_TAIL_IS_BONE = $0001;
+  BONE_FLAG_IK = $0020;
+  BONE_FLAG_INHERIT_ROTATION = $0100;
+  BONE_FLAG_INHERIT_TRANSLATION = $0200;
+  BONE_FLAG_FIXED_AXIS = $0400;
+  BONE_FLAG_LOCAL_COORDINATE = $0800;
+  BONE_FLAG_EXTERNAL_PARENT = $2000;
 
 type
   EPmxFormatError = class(Exception);
@@ -52,6 +61,7 @@ type
     procedure ReadSurfaces(Model: TPmxModel);
     procedure ReadTextures(Model: TPmxModel);
     procedure ReadMaterials(Model: TPmxModel);
+    procedure ReadBones(Model: TPmxModel);
   public
     constructor Create(const FileName: string);
     function ReadModel(const FileName: string): TPmxModel;
@@ -368,6 +378,78 @@ begin
       [SurfaceCursor, Length(Model.Indices)]);
 end;
 
+procedure TPmxBinaryReader.ReadBones(Model: TPmxModel);
+var
+  BoneCount: Integer;
+  HasLimits: Byte;
+  I: Integer;
+  J: Integer;
+  LinkCount: Integer;
+begin
+  BoneCount := ReadInt32;
+  CheckCount(BoneCount, MAX_BONE_COUNT, 'bone count');
+  SetLength(Model.Bones, BoneCount);
+  for I := 0 to BoneCount - 1 do
+  begin
+    Model.Bones[I].Name := ReadText;
+    ReadText;
+    Model.Bones[I].Position := ReadVector3;
+    Model.Bones[I].ParentIndex := ReadSignedIndex(FBoneIndexSize);
+    ReadInt32;
+    Model.Bones[I].Flags := ReadUInt16;
+
+    if (Model.Bones[I].Flags and BONE_FLAG_TAIL_IS_BONE) <> 0 then
+      ReadSignedIndex(FBoneIndexSize)
+    else
+      ReadVector3;
+    if (Model.Bones[I].Flags and (BONE_FLAG_INHERIT_ROTATION or
+      BONE_FLAG_INHERIT_TRANSLATION)) <> 0 then
+    begin
+      ReadSignedIndex(FBoneIndexSize);
+      ReadSingle;
+    end;
+    if (Model.Bones[I].Flags and BONE_FLAG_FIXED_AXIS) <> 0 then
+      ReadVector3;
+    if (Model.Bones[I].Flags and BONE_FLAG_LOCAL_COORDINATE) <> 0 then
+    begin
+      ReadVector3;
+      ReadVector3;
+    end;
+    if (Model.Bones[I].Flags and BONE_FLAG_EXTERNAL_PARENT) <> 0 then
+      ReadInt32;
+    if (Model.Bones[I].Flags and BONE_FLAG_IK) <> 0 then
+    begin
+      ReadSignedIndex(FBoneIndexSize);
+      ReadInt32;
+      ReadSingle;
+      LinkCount := ReadInt32;
+      CheckCount(LinkCount, MAX_IK_LINK_COUNT, 'IK link count');
+      for J := 0 to LinkCount - 1 do
+      begin
+        ReadSignedIndex(FBoneIndexSize);
+        HasLimits := ReadByte;
+        case HasLimits of
+          0: ;
+          1:
+            begin
+              ReadVector3;
+              ReadVector3;
+            end;
+        else
+          raise EPmxFormatError.CreateFmt('Invalid PMX IK limit flag: %d',
+            [HasLimits]);
+        end;
+      end;
+    end;
+  end;
+
+  for I := 0 to BoneCount - 1 do
+    if (Model.Bones[I].ParentIndex < -1) or
+      (Model.Bones[I].ParentIndex >= BoneCount) then
+      raise EPmxFormatError.CreateFmt('PMX parent bone index is out of range: %d',
+        [Model.Bones[I].ParentIndex]);
+end;
+
 function TPmxBinaryReader.ReadModel(const FileName: string): TPmxModel;
 begin
   Result := TPmxModel.Create;
@@ -378,6 +460,7 @@ begin
     ReadSurfaces(Result);
     ReadTextures(Result);
     ReadMaterials(Result);
+    ReadBones(Result);
   except
     Result.Free;
     raise;

@@ -7,6 +7,7 @@ interface
 uses
   System.Classes,
   Vcl.Controls,
+  Vcl.Graphics,
   PmxModel,
   PmxMorph,
   PmxPose,
@@ -28,7 +29,7 @@ type
     FSelectedTarget: TMmdPreviewTarget;
     // モデル本体を含む確定シーンを更新する。カメラ値と初回フレームはRendererが維持する。
     procedure RebuildScene;
-    // モデル本体を維持し、ドラッグ中の骨格オーバーレイだけを更新する。
+    // モデル本体を維持し、同じ最終ボーン計算で骨格オーバーレイだけを更新する。
     procedure RebuildSkeleton;
     // 頂点を再生成せず、カメラ定数だけを更新する。
     procedure UpdateCamera;
@@ -42,6 +43,8 @@ type
     destructor Destroy; override;
     // 保存対象外の確認用モーフ係数を設定し、モデル本体を再構築する。
     procedure SetMorphWeights(const AWeights: TPmxMorphWeights);
+    // 現在の表示寸法とカメラで、骨格を除いたモデル画像を取得する。
+    function CaptureModelImage(Bitmap: Vcl.Graphics.TBitmap): Boolean;
     property Camera: TMmdPreviewCamera read FCamera;
     property ErrorText: string read GetErrorText;
     property LoadedTextureCount: Integer read GetLoadedTextureCount;
@@ -51,8 +54,7 @@ implementation
 
 uses
   Winapi.Windows,
-  System.SysUtils,
-  Vcl.Graphics;
+  System.SysUtils;
 
 constructor TMmdD3DViewportSurface.Create(AOwner: TComponent);
 begin
@@ -77,6 +79,12 @@ begin
   RebuildScene;
   // TrackBar操作中もWM_PAINT待ちにせず、変更済みGPUバッファを即時表示する。
   Update;
+end;
+
+function TMmdD3DViewportSurface.CaptureModelImage(
+  Bitmap: Vcl.Graphics.TBitmap): Boolean;
+begin
+  Result := (FRenderer <> nil) and FRenderer.CaptureModelImage(Bitmap);
 end;
 
 procedure TMmdD3DViewportSurface.CreateWnd;

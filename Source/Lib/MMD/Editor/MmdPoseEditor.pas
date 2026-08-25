@@ -16,10 +16,16 @@ uses
   System.Math,
   System.SysUtils,
   System.UITypes,
+  Vcl.Dialogs,
+  Vcl.Controls,
   Vcl.Forms,
+  Vcl.Graphics,
+  Vcl.StdCtrls,
   MmdPoseEditOperations,
   MmdPoseEditorLayout,
   MmdPoseHistory,
+  MmdPoseImageAutoFit,
+  MmdPoseImageClipboard,
   MmdPoseSymmetry,
   PmxModel,
   PmxMorph,
@@ -34,6 +40,7 @@ type
     FModel: TPmxModel;
     FPoses: TPmxBonePoses;
     procedure ApplyClick(Sender: TObject);
+    procedure AutoFitClick(Sender: TObject);
     procedure BoneChanged(Sender: TObject);
     procedure ResetAllClick(Sender: TObject);
     procedure ResetBranchClick(Sender: TObject);
@@ -105,6 +112,7 @@ begin
   FMorphPreview.OnWeightsChanged := MorphWeightsChanged;
 
   FApplyButton.OnClick := ApplyClick;
+  FAutoFitButton.OnClick := AutoFitClick;
   FResetBoneButton.OnClick := ResetBoneClick;
   FResetBranchButton.OnClick := ResetBranchClick;
   FResetAllButton.OnClick := ResetAllClick;
@@ -123,6 +131,33 @@ begin
     FViewport.SetScene(FModel, FPoses, FBoneList.ItemIndex);
   end;
   UpdateHistoryButtons;
+end;
+
+procedure TStandardPoseEditorForm.AutoFitClick(Sender: TObject);
+var
+  BeforePoses: TPmxBonePoses;
+begin
+  if not FViewport.HasReferenceImage then
+    Exit;
+  BeforePoses := Copy(FPoses);
+  FAutoFitButton.Enabled := False;
+  Screen.Cursor := crHourGlass;
+  try
+    if AutoFitPoseToReference(FModel, FViewport, FBoneList.ItemIndex,
+      FPoses) then
+    begin
+      FHistory.RecordBeforeEdit(BeforePoses);
+      LoadSelectedBone;
+      UpdateHistoryButtons;
+    end
+    else
+      MessageDlg('参照画像との差を改善できませんでした。'#13#10 +
+        '現在姿勢が近い場合、または画像差が大きい場合は手動で調整してください。',
+        mtInformation, [mbOK], 0);
+  finally
+    Screen.Cursor := crDefault;
+    FAutoFitButton.Enabled := FViewport.HasReferenceImage;
+  end;
 end;
 
 procedure TStandardPoseEditorForm.MorphWeightsChanged(Sender: TObject);
@@ -186,6 +221,8 @@ begin
 end;
 
 procedure TStandardPoseEditorForm.KeyDown(var Key: Word; Shift: TShiftState);
+var
+  Bitmap: TBitmap;
 begin
   if ssCtrl in Shift then
     case Key of
@@ -198,6 +235,34 @@ begin
       Ord('Y'):
         begin
           RedoClick(Self);
+          Key := 0;
+          Exit;
+        end;
+      Ord('C'):
+        if not (ActiveControl is TCustomEdit) then
+        begin
+          if not CopyModelImageToClipboard(FViewport) then
+            MessageDlg('モデル画像をクリップボードへコピーできませんでした。',
+              mtError, [mbOK], 0);
+          Key := 0;
+          Exit;
+        end;
+      Ord('V'):
+        if not (ActiveControl is TCustomEdit) then
+        begin
+          Bitmap := TBitmap.Create;
+          try
+            if PasteImageFromClipboard(Bitmap) then
+            begin
+              FViewport.SetReferenceImage(Bitmap);
+              FAutoFitButton.Enabled := True;
+            end
+            else
+              MessageDlg('クリップボードに貼り付け可能な画像がありません。',
+                mtInformation, [mbOK], 0);
+          finally
+            Bitmap.Free;
+          end;
           Key := 0;
           Exit;
         end;

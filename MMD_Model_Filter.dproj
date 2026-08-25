@@ -116,6 +116,7 @@
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DInteraction.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DShapes.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DBuffers.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DCapture.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DOverlay.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas"/>
@@ -129,6 +130,8 @@
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseHistory.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditOperations.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdMorphPreviewPanel.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseImageAutoFit.pas"/>
+        <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseImageClipboard.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditorLayout.pas"/>
         <DCCReference Include="Source\Lib\MMD\Editor\MmdPoseEditor.pas"/>
         <BuildConfiguration Include="Base">

@@ -18,6 +18,7 @@ type
   TMmdPoseEditorFormBase = class(TForm)
   protected
     FApplyButton: TButton;
+    FAutoFitButton: TButton;
     FBoneList: TListBox;
     FEdits: TMmdPoseEditControls;
     FMorphPreview: TMmdMorphPreviewPanel;
@@ -28,6 +29,8 @@ type
     FSymmetryCheck: TCheckBox;
     FUndoButton: TButton;
     FViewport: TMmdD3DViewport;
+    // 既に現在DPIへ調整済みのVCL標準フォントは維持し、配置寸法だけを変換する。
+    procedure ScaleLayoutForPPI(TargetPPI: Integer);
   public
     // モデル非依存の編集欄、操作ボタン、D3D表示領域を配置する。
     constructor CreateLayout(const EditorCaption: string);
@@ -36,7 +39,17 @@ type
 implementation
 
 uses
-  Vcl.ExtCtrls;
+  Vcl.ExtCtrls,
+  Vcl.Graphics;
+
+procedure TMmdPoseEditorFormBase.ScaleLayoutForPPI(TargetPPI: Integer);
+var
+  InitialFontHeight: Integer;
+begin
+  InitialFontHeight := Font.Height;
+  ScaleForPPI(TargetPPI);
+  Font.Height := InitialFontHeight;
+end;
 
 constructor TMmdPoseEditorFormBase.CreateLayout(const EditorCaption: string);
 const
@@ -117,6 +130,11 @@ begin
   FRedoButton.Parent := EditorPanel;
   FRedoButton.Caption := 'やり直す';
   FRedoButton.SetBounds(120, 476, 95, 32);
+  FAutoFitButton := TButton.Create(Self);
+  FAutoFitButton.Parent := EditorPanel;
+  FAutoFitButton.Caption := '画像へ概形合わせ';
+  FAutoFitButton.SetBounds(16, 524, 199, 32);
+  FAutoFitButton.Enabled := False;
 
   ButtonPanel := TPanel.Create(Self);
   ButtonPanel.Parent := EditorPanel;
@@ -139,6 +157,11 @@ begin
   FViewport := TMmdD3DViewport.Create(Self);
   FViewport.Parent := Self;
   FViewport.Align := alClient;
+
+  // CreateNewで実行時生成したControlは、Bounds設定後のDFM読込スケーリングを
+  // 通らない。全配置が揃ってから96 DPI基準の寸法を現在DPIへ一度だけ変換する。
+  // Form.Fontは生成時点ですでに現在DPI用なので、二重には拡大しない。
+  ScaleLayoutForPPI(Screen.PixelsPerInch);
 end;
 
 end.

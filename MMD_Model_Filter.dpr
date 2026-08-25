@@ -31,6 +31,7 @@ uses
   MmdD3DInteraction in 'Source\Lib\MMD\Editor\D3D\MmdD3DInteraction.pas',
   MmdD3DShapes in 'Source\Lib\MMD\Editor\D3D\MmdD3DShapes.pas',
   MmdD3DBuffers in 'Source\Lib\MMD\Editor\D3D\MmdD3DBuffers.pas',
+  MmdD3DCapture in 'Source\Lib\MMD\Editor\D3D\MmdD3DCapture.pas',
   MmdD3DOverlay in 'Source\Lib\MMD\Editor\D3D\MmdD3DOverlay.pas',
   MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
   MmdD3DTextures in 'Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas',
@@ -44,6 +45,8 @@ uses
   MmdPoseHistory in 'Source\Lib\MMD\Editor\MmdPoseHistory.pas',
   MmdPoseEditOperations in 'Source\Lib\MMD\Editor\MmdPoseEditOperations.pas',
   MmdMorphPreviewPanel in 'Source\Lib\MMD\Editor\MmdMorphPreviewPanel.pas',
+  MmdPoseImageAutoFit in 'Source\Lib\MMD\Editor\MmdPoseImageAutoFit.pas',
+  MmdPoseImageClipboard in 'Source\Lib\MMD\Editor\MmdPoseImageClipboard.pas',
   MmdPoseEditorLayout in 'Source\Lib\MMD\Editor\MmdPoseEditorLayout.pas',
   MmdPoseEditor in 'Source\Lib\MMD\Editor\MmdPoseEditor.pas';
 

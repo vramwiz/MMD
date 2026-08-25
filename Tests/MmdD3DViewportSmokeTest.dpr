@@ -1,14 +1,16 @@
 ﻿program MmdD3DViewportSmokeTest;
 
-{$APPTYPE GUI}
+{$APPTYPE CONSOLE}
 
 uses
   Winapi.Windows,
   Winapi.Messages,
   System.Math,
   System.SysUtils,
+  System.Types,
   Vcl.Controls,
   Vcl.Forms,
+  Vcl.Graphics,
   PmxModel in 'Source\Lib\MMD\Core\PmxModel.pas',
   PmxPoseTypes in 'Source\Lib\MMD\Core\PmxPoseTypes.pas',
   PmxPoseMath in 'Source\Lib\MMD\Core\PmxPoseMath.pas',
@@ -24,11 +26,13 @@ uses
   MmdPoseHistory in 'Source\Lib\MMD\Editor\MmdPoseHistory.pas',
   MmdPoseEditOperations in 'Source\Lib\MMD\Editor\MmdPoseEditOperations.pas',
   MmdPoseSymmetry in 'Source\Lib\MMD\Editor\MmdPoseSymmetry.pas',
+  MmdPoseImageAutoFit in 'Source\Lib\MMD\Editor\MmdPoseImageAutoFit.pas',
   MmdD3DScene in 'Source\Lib\MMD\Editor\D3D\MmdD3DScene.pas',
   MmdD3DSelection in 'Source\Lib\MMD\Editor\D3D\MmdD3DSelection.pas',
   MmdD3DInteraction in 'Source\Lib\MMD\Editor\D3D\MmdD3DInteraction.pas',
   MmdD3DShapes in 'Source\Lib\MMD\Editor\D3D\MmdD3DShapes.pas',
   MmdD3DBuffers in 'Source\Lib\MMD\Editor\D3D\MmdD3DBuffers.pas',
+  MmdD3DCapture in 'Source\Lib\MMD\Editor\D3D\MmdD3DCapture.pas',
   MmdD3DOverlay in 'Source\Lib\MMD\Editor\D3D\MmdD3DOverlay.pas',
   MmdD3DShaders in 'Source\Lib\MMD\Editor\D3D\MmdD3DShaders.pas',
   MmdD3DTextures in 'Source\Lib\MMD\Editor\D3D\MmdD3DTextures.pas',
@@ -233,6 +237,168 @@ begin
   Elapsed := GetTickCount64 - Started;
   if Elapsed > 2000 then
     raise Exception.CreateFmt('camera interaction is too slow: %d ms', [Elapsed]);
+end;
+
+procedure CheckModelImageCapture(Viewport: TMmdD3DViewport);
+var
+  Bitmap: TBitmap;
+begin
+  Bitmap := TBitmap.Create;
+  try
+    if not Viewport.CaptureModelImage(Bitmap) then
+      raise Exception.Create('model-only image capture failed: ' +
+        Viewport.ErrorText);
+    if (Bitmap.PixelFormat <> pf32bit) or
+      (Bitmap.Width <> Viewport.ClientWidth) or
+      (Bitmap.Height <> Viewport.ClientHeight) then
+      raise Exception.CreateFmt('captured image size mismatch: %dx%d <> %dx%d',
+        [Bitmap.Width, Bitmap.Height, Viewport.ClientWidth,
+        Viewport.ClientHeight]);
+  finally
+    Bitmap.Free;
+  end;
+end;
+
+procedure CheckReferenceImageRetention(Viewport: TMmdD3DViewport);
+var
+  Bitmap: TBitmap;
+begin
+  Bitmap := TBitmap.Create;
+  try
+    Bitmap.PixelFormat := pf32bit;
+    Bitmap.SetSize(320, 180);
+    Bitmap.Canvas.Brush.Color := clRed;
+    Bitmap.Canvas.FillRect(Rect(0, 0, Bitmap.Width, Bitmap.Height));
+    Viewport.SetReferenceImage(Bitmap);
+  finally
+    Bitmap.Free;
+  end;
+  if not Viewport.HasReferenceImage then
+    raise Exception.Create('pasted reference image was not retained');
+  Viewport.Update;
+end;
+
+function FindTestBone(Model: TPmxModel; const Name: string): Integer; forward;
+
+procedure CheckSkeletonMatchesModel(Model: TPmxModel;
+  const Poses: TPmxBonePoses);
+var
+  BoneIndex: Integer;
+  ModelTransforms, SkeletonTransforms: TPmxBoneTransforms;
+  Skinned: TPmxSkinnedVertices;
+begin
+  DeformPreviewModel(Model, Poses, nil, ModelTransforms, Skinned);
+  CalculatePreviewSkeleton(Model, Poses, nil, SkeletonTransforms);
+  for BoneIndex := 0 to High(ModelTransforms) do
+    if (Abs(ModelTransforms[BoneIndex].Position.X -
+      SkeletonTransforms[BoneIndex].Position.X) > 0.0001) or
+      (Abs(ModelTransforms[BoneIndex].Position.Y -
+      SkeletonTransforms[BoneIndex].Position.Y) > 0.0001) or
+      (Abs(ModelTransforms[BoneIndex].Position.Z -
+      SkeletonTransforms[BoneIndex].Position.Z) > 0.0001) then
+      raise Exception.CreateFmt(
+        'skeleton position differs from skinned model at bone %d',
+        [BoneIndex]);
+end;
+
+procedure CheckDirectKneePoseMovesModel(Model: TPmxModel;
+  const InitialPoses: TPmxBonePoses);
+var
+  AnkleIndex, KneeIndex, VertexIndex: Integer;
+  Axis: TPmxVector3;
+  BaseSkinned, MovedSkinned: TPmxSkinnedVertices;
+  BaseTransforms, MovedTransforms: TPmxBoneTransforms;
+  MaxVertexDelta: Single;
+  WorkPoses: TPmxBonePoses;
+begin
+  KneeIndex := FindTestBone(Model, string('右ひざ'));
+  AnkleIndex := FindTestBone(Model, string('右足首'));
+  if (KneeIndex < 0) or (AnkleIndex < 0) then
+    raise Exception.Create('direct knee test bones were not found');
+  DeformPreviewModel(Model, InitialPoses, nil, BaseTransforms, BaseSkinned);
+  WorkPoses := Copy(InitialPoses);
+  Axis := Default(TPmxVector3);
+  Axis.X := 1;
+  WorkPoses[KneeIndex].Rotation := QuaternionFromAxisAngle(Axis,
+    DegToRad(10));
+  DeformPreviewModel(Model, WorkPoses, nil, MovedTransforms, MovedSkinned);
+  if Sqrt(Sqr(MovedTransforms[AnkleIndex].Position.X -
+    BaseTransforms[AnkleIndex].Position.X) +
+    Sqr(MovedTransforms[AnkleIndex].Position.Y -
+    BaseTransforms[AnkleIndex].Position.Y) +
+    Sqr(MovedTransforms[AnkleIndex].Position.Z -
+    BaseTransforms[AnkleIndex].Position.Z)) < 0.01 then
+    raise Exception.Create('direct knee pose did not move ankle transform');
+  MaxVertexDelta := 0;
+  for VertexIndex := 0 to High(BaseSkinned) do
+    MaxVertexDelta := Max(MaxVertexDelta, Sqrt(
+      Sqr(MovedSkinned[VertexIndex].Position.X -
+      BaseSkinned[VertexIndex].Position.X) +
+      Sqr(MovedSkinned[VertexIndex].Position.Y -
+      BaseSkinned[VertexIndex].Position.Y) +
+      Sqr(MovedSkinned[VertexIndex].Position.Z -
+      BaseSkinned[VertexIndex].Position.Z)));
+  if MaxVertexDelta < 0.01 then
+    raise Exception.Create('direct knee pose did not move model vertices');
+end;
+
+function FindTestBone(Model: TPmxModel; const Name: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(Model.Bones) do
+    if SameText(Model.Bones[I].Name, Name) then
+      Exit(I);
+  Result := -1;
+end;
+
+procedure CheckImageAutoFit(Viewport: TMmdD3DViewport; Model: TPmxModel;
+  const InitialPoses: TPmxBonePoses);
+var
+  Axis: TPmxVector3;
+  LeftArm, RightArm: Integer;
+  Current, NormalizedReference, Reference: TBitmap;
+  FinalScore, InitialScore: UInt64;
+  TargetPoses, WorkPoses: TPmxBonePoses;
+begin
+  LeftArm := FindTestBone(Model, string('左腕'));
+  RightArm := FindTestBone(Model, string('右腕'));
+  if (LeftArm < 0) or (RightArm < 0) then
+    raise Exception.Create('auto-fit test arm bones were not found');
+  TargetPoses := Copy(InitialPoses);
+  Axis := Default(TPmxVector3);
+  Axis.Z := 1;
+  TargetPoses[LeftArm].Rotation := QuaternionFromAxisAngle(Axis, DegToRad(-45));
+  TargetPoses[RightArm].Rotation := QuaternionFromAxisAngle(Axis, DegToRad(45));
+  Reference := TBitmap.Create;
+  Current := TBitmap.Create;
+  NormalizedReference := TBitmap.Create;
+  try
+    Viewport.SetScene(Model, TargetPoses, 0);
+    if not Viewport.CaptureModelImage(Reference) then
+      raise Exception.Create('auto-fit reference capture failed');
+    Viewport.SetReferenceImage(Reference);
+    Viewport.CopyReferenceImageForViewport(NormalizedReference);
+    WorkPoses := Copy(InitialPoses);
+    Viewport.SetScene(Model, WorkPoses, 0);
+    if not Viewport.CaptureModelImage(Current) then
+      raise Exception.Create('auto-fit initial capture failed');
+    if PoseImageDifference(Reference, NormalizedReference) <> 0 then
+      raise Exception.Create('normalized auto-fit reference changed pixels');
+    if PoseImageDifference(Current, NormalizedReference) = 0 then
+      raise Exception.Create('auto-fit test pose already matched reference');
+    if not AutoFitPoseToReferenceScores(Model, Viewport, 0, WorkPoses,
+      InitialScore, FinalScore) then
+      raise Exception.Create('image auto-fit did not improve the pose');
+    if (FinalScore >= InitialScore) or
+      ((Abs(WorkPoses[LeftArm].Rotation.Z) < 0.05) and
+      (Abs(WorkPoses[RightArm].Rotation.Z) < 0.05)) then
+      raise Exception.Create('image auto-fit did not rotate an arm');
+  finally
+    NormalizedReference.Free;
+    Current.Free;
+    Reference.Free;
+  end;
 end;
 
 procedure CheckJointMouseInteraction(Viewport: TMmdD3DViewport;
@@ -690,12 +856,17 @@ begin
       CheckAspectCorrection(Model, Poses);
       CheckCameraProjection(Model, Poses);
       CheckFixedPreviewFrame(Model, Poses);
+      CheckSkeletonMatchesModel(Model, Poses);
+      CheckDirectKneePoseMovesModel(Model, Poses);
       Viewport.SetScene(Model, Poses, 0);
       Form.Show;
       Application.ProcessMessages;
       CheckBoneMouseInteraction(Viewport, Model, Poses);
       CheckCameraInteractionPerformance(Viewport);
       CheckFixedViewKeyboard(Viewport);
+      CheckModelImageCapture(Viewport);
+      CheckReferenceImageRetention(Viewport);
+      CheckImageAutoFit(Viewport, Model, Poses);
       Sleep(250);
       Application.ProcessMessages;
       if Viewport.ErrorText <> '' then
@@ -708,7 +879,7 @@ begin
   except
     on E: Exception do
     begin
-      OutputDebugString(PChar(E.Message));
+      Writeln(E.ClassName + ': ' + E.Message);
       ExitCode := 1;
     end;
   end;

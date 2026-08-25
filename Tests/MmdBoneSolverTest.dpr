@@ -163,6 +163,27 @@ begin
   end;
 end;
 
+procedure TestExplicitFkDisablesIk;
+var
+  Model: TPmxModel;
+  Poses: TPmxBonePoses;
+  Transforms: TPmxBoneTransforms;
+begin
+  Model := NewModel(4);
+  try
+    ConfigureIkModel(Model, False);
+    InitializeBonePoses(Model, Poses);
+    Poses[1].Rotation := QuaternionFromEulerXYZ(0, 0, 0.3);
+    CalculateBoneTransforms(Model, Poses, Transforms);
+    CheckNear(Transforms[2].Position.X, Cos(0.3), 0.002,
+      'explicit FK effector x');
+    CheckNear(Transforms[2].Position.Y, Sin(0.3), 0.002,
+      'explicit FK effector y');
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure PrintRealModelStats;
 var
   Bone: TPmxBone;
@@ -170,7 +191,7 @@ var
   Model: TPmxModel;
 begin
   Model := GetCachedPmxModel(
-    'D:\DelphiProg\test\MMD\Model\ふらすこ式風きりたん_ver0.05\ふらすこ式風きりたん_ver0.05.pmx');
+    'D:\VoiceroidProj\MMD\ふらすこ式風きりたん_ver0.05\ふらすこ式風きりたん_ver0.05.pmx');
   GrantCount := 0;
   IkCount := 0;
   LocalGrantCount := 0;
@@ -195,6 +216,7 @@ begin
     TestGrant(False);
     TestIk;
     TestIkLimits;
+    TestExplicitFkDisablesIk;
     PrintRealModelStats;
     Writeln('MmdBoneSolverTest: PASS');
   except

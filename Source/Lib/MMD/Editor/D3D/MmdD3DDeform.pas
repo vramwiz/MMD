@@ -13,7 +13,7 @@ uses
 procedure DeformPreviewModel(Model: TPmxModel; const Poses: TPmxBonePoses;
   const MorphWeights: TPmxMorphWeights; out Transforms: TPmxBoneTransforms;
   out Skinned: TPmxSkinnedVertices);
-// ドラッグ中の軽量骨格計算へボーンモーフだけを含む作業姿勢を渡す。
+// 本体と同じIK適用後の骨格計算へボーンモーフを含む作業姿勢を渡す。
 procedure CalculatePreviewSkeleton(Model: TPmxModel; const Poses: TPmxBonePoses;
   const MorphWeights: TPmxMorphWeights; out Transforms: TPmxBoneTransforms);
 
@@ -49,7 +49,7 @@ var
   WorkPoses: TPmxBonePoses;
 begin
   ApplyPreviewMorphs(Model, Poses, MorphWeights, WorkPoses, UnusedPositions);
-  CalculateInteractiveBoneTransforms(Model, WorkPoses, Transforms);
+  CalculateFinalBoneTransforms(Model, WorkPoses, Transforms);
 end;
 
 end.

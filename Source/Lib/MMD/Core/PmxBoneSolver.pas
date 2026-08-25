@@ -257,6 +257,28 @@ begin
   CalculateBaseTransforms(Model, WorkPoses, Transforms);
 end;
 
+function HasExplicitPose(const Pose: TPmxBonePose): Boolean;
+begin
+  Result := (Abs(Pose.Translation.X) > 0.000001) or
+    (Abs(Pose.Translation.Y) > 0.000001) or
+    (Abs(Pose.Translation.Z) > 0.000001) or
+    (Abs(Pose.Rotation.X) > 0.000001) or
+    (Abs(Pose.Rotation.Y) > 0.000001) or
+    (Abs(Pose.Rotation.Z) > 0.000001) or
+    (Abs(Abs(Pose.Rotation.W) - 1.0) > 0.000001);
+end;
+
+function HasExplicitIkLinkPose(const Model: TPmxModel; IkBoneIndex: Integer;
+  const Poses: TPmxBonePoses): Boolean;
+var
+  Link: TPmxIkLink;
+begin
+  for Link in Model.Bones[IkBoneIndex].IkLinks do
+    if HasExplicitPose(Poses[Link.BoneIndex]) then
+      Exit(True);
+  Result := False;
+end;
+
 procedure CalculateFinalBoneTransforms(const Model: TPmxModel;
   const Poses: TPmxBonePoses; var Transforms: TPmxBoneTransforms);
 var
@@ -271,7 +293,8 @@ begin
   Order := BuildBoneOrder(Model);
   CalculateBaseTransforms(Model, WorkPoses, Transforms);
   for BoneIndex in Order do
-    if (Model.Bones[BoneIndex].Flags and PMX_BONE_FLAG_IK) <> 0 then
+    if ((Model.Bones[BoneIndex].Flags and PMX_BONE_FLAG_IK) <> 0) and
+      not HasExplicitIkLinkPose(Model, BoneIndex, Poses) then
       ApplyIkBone(Model, BoneIndex, WorkPoses, Transforms);
 end;
 

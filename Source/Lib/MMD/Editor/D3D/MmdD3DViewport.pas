@@ -8,6 +8,7 @@ uses
   System.Classes,
   System.Types,
   Vcl.Controls,
+  Vcl.Graphics,
   PmxModel,
   PmxPose,
   MmdD3DScene,
@@ -40,6 +41,8 @@ type
     FOnPoseEditStarted: TNotifyEvent;
     FPressedViewKeys: TMmdPressedViewKeys;
     FFixedViewOpposite: Boolean;
+    FReferenceImage: Vcl.Graphics.TBitmap;
+    procedure DrawReferenceImage;
     procedure BeginTargetDrag(const Target: TMmdPreviewTarget);
     function GetSelectedBoneLocked: Boolean;
     procedure SelectTarget(const Target: TMmdPreviewTarget);
@@ -51,15 +54,23 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure Paint; override;
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
   public
     // 描画面へ編集用カーソル、ヒント、キーフォーカスを追加したControlを生成する。
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     // モデルと姿勢の作業用コピーを設定し、GPU頂点を再構築する。
     procedure SetScene(AModel: TPmxModel; const APoses: TPmxBonePoses;
       ASelectedBone: Integer);
     // 編集中の姿勢作業用コピーを呼び出し側へ返す。
     procedure CopyPoses(out APoses: TPmxBonePoses);
+    // 貼り付け画像をフォーム内の独立コピーとして保持し、半透明で重ねる。
+    procedure SetReferenceImage(Bitmap: Vcl.Graphics.TBitmap);
+    function HasReferenceImage: Boolean;
+    // 参照画像を現在のViewportと同じ寸法・投影基準へ変換してコピーする。
+    procedure CopyReferenceImageForViewport(Bitmap: Vcl.Graphics.TBitmap);
+    function IsBoneLocked(BoneIndex: Integer): Boolean;
     property SelectedBoneLocked: Boolean read GetSelectedBoneLocked;
     property SelectedBone: Integer read FSelectedBone;
     property SelectedTarget: TMmdPreviewTarget read FSelectedTarget;
@@ -85,6 +96,7 @@ uses
 constructor TMmdD3DViewport.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FReferenceImage := Vcl.Graphics.TBitmap.Create;
   FSelectedBone := -1;
   FMouseDownTarget := EmptyPreviewTarget;
   FDragMirrorBone := -1;
@@ -356,6 +368,89 @@ end;
 procedure TMmdD3DViewport.CopyPoses(out APoses: TPmxBonePoses);
 begin
   APoses := Copy(FPoses);
+end;
+
+destructor TMmdD3DViewport.Destroy;
+begin
+  FReferenceImage.Free;
+  inherited Destroy;
+end;
+
+function TMmdD3DViewport.HasReferenceImage: Boolean;
+begin
+  Result := (FReferenceImage.Width > 0) and (FReferenceImage.Height > 0);
+end;
+
+function TMmdD3DViewport.IsBoneLocked(BoneIndex: Integer): Boolean;
+begin
+  Result := (BoneIndex >= 0) and (BoneIndex < Length(FLockedBones)) and
+    FLockedBones[BoneIndex];
+end;
+
+procedure TMmdD3DViewport.SetReferenceImage(Bitmap: Vcl.Graphics.TBitmap);
+begin
+  if Bitmap = nil then
+    FReferenceImage.SetSize(0, 0)
+  else
+    FReferenceImage.Assign(Bitmap);
+  Invalidate;
+end;
+
+procedure TMmdD3DViewport.CopyReferenceImageForViewport(
+  Bitmap: Vcl.Graphics.TBitmap);
+var
+  DestLeft, DestWidth: Integer;
+begin
+  Bitmap.PixelFormat := pf32bit;
+  Bitmap.SetSize(ClientWidth, ClientHeight);
+  Bitmap.Canvas.Brush.Color := RGB(14, 15, 19);
+  Bitmap.Canvas.FillRect(Rect(0, 0, Bitmap.Width, Bitmap.Height));
+  if not HasReferenceImage or (ClientHeight <= 0) then
+    Exit;
+  DestWidth := MulDiv(FReferenceImage.Width, ClientHeight,
+    FReferenceImage.Height);
+  DestLeft := (ClientWidth - DestWidth) div 2;
+  Bitmap.Canvas.StretchDraw(Rect(DestLeft, 0, DestLeft + DestWidth,
+    ClientHeight), FReferenceImage);
+end;
+
+procedure TMmdD3DViewport.DrawReferenceImage;
+const
+  REFERENCE_ALPHA = 112;
+var
+  Blend: TBlendFunction;
+  DestLeft, DestWidth: Integer;
+  OldBitmap: HGDIOBJ;
+  SourceDC: HDC;
+begin
+  if not HasReferenceImage or (ClientHeight <= 0) then
+    Exit;
+  // 投影上のモデル寸法はViewport高さに比例するため、参照画像も高さ基準で
+  // 拡大縮小する。横幅差は中央寄せし、縦横比を変えない。
+  DestWidth := MulDiv(FReferenceImage.Width, ClientHeight,
+    FReferenceImage.Height);
+  DestLeft := (ClientWidth - DestWidth) div 2;
+  SourceDC := CreateCompatibleDC(Canvas.Handle);
+  if SourceDC = 0 then
+    Exit;
+  OldBitmap := SelectObject(SourceDC, FReferenceImage.Handle);
+  try
+    Blend.BlendOp := AC_SRC_OVER;
+    Blend.BlendFlags := 0;
+    Blend.SourceConstantAlpha := REFERENCE_ALPHA;
+    Blend.AlphaFormat := 0;
+    AlphaBlend(Canvas.Handle, DestLeft, 0, DestWidth, ClientHeight,
+      SourceDC, 0, 0, FReferenceImage.Width, FReferenceImage.Height, Blend);
+  finally
+    SelectObject(SourceDC, OldBitmap);
+    DeleteDC(SourceDC);
+  end;
+end;
+
+procedure TMmdD3DViewport.Paint;
+begin
+  inherited Paint;
+  DrawReferenceImage;
 end;
 
 function TMmdD3DViewport.DoMouseWheel(Shift: TShiftState;

@@ -6,6 +6,7 @@ interface
 
 uses
   Winapi.Windows,
+  Vcl.Graphics,
   PmxModel,
   PmxMorph,
   PmxPose,
@@ -24,6 +25,8 @@ type
     destructor Destroy; override;
     // 保持中のGPUバッファを現在のRenderTargetへ描画してPresentする。
     procedure Render;
+    // 現在のカメラと表示寸法のまま、骨格を除くモデル描画を32bit Bitmapへ取得する。
+    function CaptureModelImage(Bitmap: Vcl.Graphics.TBitmap): Boolean;
     // SwapChainと深度バッファを指定サイズへ作り直す。0以下のサイズは無視する。
     procedure Resize(Width, Height: Integer);
     // 姿勢からCPU頂点を再生成し、このRendererだけが所有するGPUバッファへ置き換える。
@@ -53,6 +56,7 @@ uses
   System.Math,
   System.SysUtils,
   MmdD3DBuffers,
+  MmdD3DCapture,
   MmdD3DDevice,
   MmdD3DOverlay,
   MmdD3DShapes,
@@ -85,9 +89,11 @@ type
     FTextureModel: TPmxModel;
     FTextures: TMmdD3DTextures;
     FViewHeight, FViewWidth: Integer;
+    procedure DrawFrame(IncludeOverlay, PresentFrame: Boolean);
   public
     constructor Create(Window: HWND; Width, Height: Integer);
     destructor Destroy; override;
+    function CaptureModelImage(Bitmap: Vcl.Graphics.TBitmap): Boolean;
     procedure Render;
     procedure Resize(Width, Height: Integer);
     procedure SetScene(Model: TPmxModel; const Poses: TPmxBonePoses;
@@ -262,7 +268,8 @@ begin
     X, Y);
 end;
 
-procedure TMmdD3DRendererImpl.Render;
+procedure TMmdD3DRendererImpl.DrawFrame(IncludeOverlay,
+  PresentFrame: Boolean);
 var
   ClearColor: TFourSingleArray;
   BlendFactor: TFourSingleArray;
@@ -298,14 +305,42 @@ begin
       FContext.Draw(Batch.VertexCount, Batch.FirstVertex);
     end;
   end;
-  if FOverlay.HasVertices then
+  if IncludeOverlay and FOverlay.HasVertices then
   begin
     // 編集対象の確認を優先し、モデルに隠れる骨格形状も常に前面へ重ねる。
     FContext.ClearDepthStencilView(FDepthView, D3D11_CLEAR_DEPTH, 1.0, 0);
     FTextures.Bind(FContext, -1);
   end;
-  FOverlay.Render(FContext, Stride, Offset);
-  FSwapChain.Present(1, 0);
+  if IncludeOverlay then
+    FOverlay.Render(FContext, Stride, Offset);
+  if PresentFrame then
+    FSwapChain.Present(1, 0);
+end;
+
+procedure TMmdD3DRendererImpl.Render;
+begin
+  DrawFrame(True, True);
+end;
+
+function TMmdD3DRendererImpl.CaptureModelImage(
+  Bitmap: Vcl.Graphics.TBitmap): Boolean;
+begin
+  Result := False;
+  if (Bitmap = nil) or (FDevice = nil) or (FContext = nil) or
+    (FSwapChain = nil) then
+    Exit;
+  try
+    // Present前のBackBufferへモデルだけを描き、画面上の骨格表示は変更しない。
+    DrawFrame(False, False);
+    ReadSwapChainToBitmap(FSwapChain, FDevice, FContext, Bitmap);
+    FErrorText := '';
+    Result := True;
+  except
+    on E: Exception do
+      FErrorText := E.Message;
+  end;
+  // コピー用フレームはPresentせず、通常の骨格付き表示へ直ちに戻す。
+  DrawFrame(True, True);
 end;
 
 constructor TMmdD3DRenderer.Create(Window: HWND; Width, Height: Integer);
@@ -338,6 +373,12 @@ end;
 procedure TMmdD3DRenderer.Render;
 begin
   TMmdD3DRendererImpl(FImpl).Render;
+end;
+
+function TMmdD3DRenderer.CaptureModelImage(
+  Bitmap: Vcl.Graphics.TBitmap): Boolean;
+begin
+  Result := TMmdD3DRendererImpl(FImpl).CaptureModelImage(Bitmap);
 end;
 
 procedure TMmdD3DRenderer.Resize(Width, Height: Integer);

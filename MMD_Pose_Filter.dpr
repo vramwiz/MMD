@@ -14,6 +14,8 @@ uses
   PmxBoneSolver in 'Source\Lib\MMD\Core\PmxBoneSolver.pas',
   PmxPose in 'Source\Lib\MMD\Core\PmxPose.pas',
   PmxPoseCodec in 'Source\Lib\MMD\IO\PmxPoseCodec.pas',
+  MmdAiSchema in 'Source\Lib\MMD\AI\MmdAiSchema.pas',
+  MmdAiProvider in 'Source\Lib\MMD\AI\MmdAiProvider.pas',
   PmxReader in 'Source\Lib\MMD\IO\PmxReader.pas',
   PmxBinaryStream in 'Source\Lib\MMD\IO\PmxBinaryStream.pas',
   PmxGeometryReader in 'Source\Lib\MMD\IO\PmxGeometryReader.pas',
@@ -63,7 +65,9 @@ end;
 exports
   InitializePlugin name 'InitializePlugin',
   UninitializePlugin name 'UninitializePlugin',
-  GetFilterPluginTable name 'GetFilterPluginTable';
+  GetFilterPluginTable name 'GetFilterPluginTable',
+  MmdAiProviderGetVersion name 'MmdAiProviderGetVersion',
+  MmdAiProviderInvoke name 'MmdAiProviderInvoke';
 
 begin
 end.

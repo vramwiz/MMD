@@ -98,6 +98,8 @@
         <DCCReference Include="Source\Lib\MMD\Core\PmxBoneSolver.pas"/>
         <DCCReference Include="Source\Lib\MMD\Core\PmxPose.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxPoseCodec.pas"/>
+        <DCCReference Include="Source\Lib\MMD\AI\MmdAiSchema.pas"/>
+        <DCCReference Include="Source\Lib\MMD\AI\MmdAiProvider.pas"/>
         <DCCReference Include="Source\Lib\MMD\IPC\MmdPoseSharedMemory.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxReader.pas"/>
         <DCCReference Include="Source\Lib\MMD\IO\PmxBinaryStream.pas"/>
